@@ -11,7 +11,7 @@ export default [
     files: ['**/*.ts'],
     languageOptions: {
       parser: tsParser,
-      globals: { NodeJS: 'readonly', URL: 'readonly', HeadersInit: 'readonly', Response: 'readonly', console: 'readonly', fetch: 'readonly', process: 'readonly' }
+      globals: { NodeJS: 'readonly', URL: 'readonly', HeadersInit: 'readonly', Response: 'readonly', console: 'readonly', fetch: 'readonly', process: 'readonly', setTimeout: 'readonly' }
     },
     plugins: { '@typescript-eslint': tsPlugin },
     rules: tsPlugin.configs.recommended.rules

@@ -2,7 +2,7 @@
 
 A small production-style TypeScript backend for accepting payment events with at-least-once delivery and idempotent processing. Each unique idempotency key produces at most one business effect.
 
-The project uses PostgreSQL as the source of truth. Redis is used for delivery helpers, delayed retries, and worker coordination. The current implementation covers Phase 1: the ingest API and transactional outbox.
+The project uses PostgreSQL as the source of truth. Redis is used for delivery helpers, delayed retries, and worker coordination. The current implementation covers Phase 2: the ingest API, transactional outbox, and relay to a Redis Stream.
 
 ## Current status
 
@@ -18,8 +18,11 @@ Implemented:
 - API-key authentication using `crypto.timingSafeEqual`
 - Structured request logging and Prometheus metrics
 - Isolated integration tests using `events_test` and Redis DB 15
+- Relay polling with `FOR UPDATE SKIP LOCKED`, publish-before-mark ordering, and retry on database failures
+- Relay stream-length metrics on port 9102 by default
+- Multi-stage Docker image and Compose services for the API and relay
 
-Relay publishing, workers, retries, dead-letter handling, sweeper recovery, chaos scenarios, and load reports are planned for later phases.
+Workers, retries, dead-letter handling, sweeper recovery, and load reports are planned for later phases.
 
 ## Architecture
 
@@ -28,8 +31,8 @@ flowchart LR
   P[Producer] -->|POST /v1/events + Idempotency-Key| API[API]
   API -->|one transaction| PG[(PostgreSQL)]
   API -->|event row + outbox row| PG
-  PG -.->|Phase 2| R[Relay]
-  R -.->|Phase 2| RS[(Redis Stream)]
+  PG -->|Phase 2| R[Relay]
+  R -->|XADD events:stream| RS[(Redis Stream)]
   RS -.->|Phase 3| W[Workers]
   W -.->|Phase 3| PG
 ```
@@ -53,6 +56,8 @@ docker compose up -d postgres redis
 pnpm install --frozen-lockfile
 pnpm migrate
 pnpm dev:api
+# In another terminal:
+pnpm dev:relay
 ```
 
 The API listens on `http://localhost:3000`. Configuration defaults are in `src/shared/config.ts`. Copy the documented values into `.env` when overrides are needed. Do not commit `.env` or secrets.
@@ -95,7 +100,7 @@ pnpm test:integration
 
 Integration tests create and migrate `events_test`, use a separate PostgreSQL pool, and flush Redis DB 15 between tests. The production `events` database is not used by the integration suite.
 
-The Phase 1 API suite verifies validation, authentication, duplicate requests, concurrent same-key requests, transactional outbox rollback, unavailable PostgreSQL handling, and event lookup.
+The Phase 1 API suite verifies validation, authentication, duplicate requests, concurrent same-key requests, transactional outbox rollback, unavailable PostgreSQL handling, and event lookup. The Phase 2 relay suite verifies single-relay publishing, parallel relays with `SKIP LOCKED`, crash-after-publish recovery behavior, and stream message shape.
 
 ## Project documentation
 

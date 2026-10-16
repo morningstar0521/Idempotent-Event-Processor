@@ -11,6 +11,7 @@
     "dev:api": "tsx src/bin/api.ts",
     "dev:relay": "tsx src/bin/relay.ts",
     "dev:worker": "tsx src/bin/worker.ts",
+    "build": "tsc -p tsconfig.build.json",
     "migrate": "tsx scripts/migrate.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",

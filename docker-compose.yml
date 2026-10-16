@@ -28,6 +28,39 @@ services:
       timeout: 5s
       retries: 10
 
+  api:
+    build: .
+    environment:
+      CMD: api
+      NODE_ENV: development
+      API_KEY: ${API_KEY:-change-me}
+      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@postgres:5432/events}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      PORT: 3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - '3000:3000'
+    restart: unless-stopped
+
+  relay:
+    build: .
+    environment:
+      CMD: relay
+      NODE_ENV: development
+      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@postgres:5432/events}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      METRICS_PORT: ${METRICS_PORT:-9102}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:

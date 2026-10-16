@@ -5,7 +5,7 @@ const booleanEnv = z.enum(['true', 'false']).default('false').transform((value) 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
-  METRICS_PORT: z.coerce.number().int().positive().default(9101),
+  METRICS_PORT: z.coerce.number().int().positive().default(9102),
   API_KEY: z.string().min(1).default('change-me'),
   DATABASE_URL: z.string().url().default('postgres://postgres:postgres@localhost:5432/events'),
   TEST_DATABASE_URL: z.string().url().default('postgres://postgres:postgres@localhost:5432/events_test'),

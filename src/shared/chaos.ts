@@ -5,7 +5,7 @@ export class SimulatedCrash extends Error {
   }
 }
 
-type ChaosOptions = { crash?: boolean; pauseAt?: string; failCounter?: number };
+type ChaosOptions = { crash?: boolean; crashAfterRelayXadd?: boolean; pauseAt?: string; failCounter?: number };
 let options: ChaosOptions = {};
 
 function enabled(): boolean {
@@ -29,6 +29,10 @@ export function crashBeforeCommit(): void {
 
 export function crashAfterCommit(): void {
   if (enabled() && options.crash) throw new SimulatedCrash();
+}
+
+export function crashAfterRelayXadd(): void {
+  if (enabled() && options.crashAfterRelayXadd) throw new SimulatedCrash();
 }
 
 export async function pause(point: 'before_tx' | 'inside_tx'): Promise<void> {
