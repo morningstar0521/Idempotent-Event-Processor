@@ -106,4 +106,41 @@ export function registerEventRoutes(router: Router, options: EventRouteOptions =
       processed_at: event.processed_at?.toISOString() ?? null,
     });
   });
+
+  router.get('/wallets/:merchantId', async (request, response) => {
+    const verify = request.query.verify === 'true';
+    let result;
+    try {
+      result = await queryFn<{
+        merchant_id: string;
+        balance_minor: string;
+        ledger_entries: string;
+        ledger_sum_minor: string;
+      }>(
+        `SELECT w.merchant_id, w.balance_minor, COUNT(l.id) AS ledger_entries,
+                COALESCE(SUM(l.amount_minor), 0) AS ledger_sum_minor
+         FROM wallets w
+         LEFT JOIN ledger_entries l ON l.merchant_id = w.merchant_id
+         WHERE w.merchant_id = $1
+         GROUP BY w.merchant_id, w.balance_minor`,
+        [request.params.merchantId],
+      );
+    } catch {
+      throw new UnavailableError();
+    }
+    if (result.rowCount !== 1) throw new NotFoundError();
+    const wallet = result.rows[0];
+    const balance = Number(wallet.balance_minor);
+    const body: Record<string, unknown> = {
+      merchant_id: wallet.merchant_id,
+      balance_minor: balance,
+      ledger_entries: Number(wallet.ledger_entries),
+    };
+    if (verify) {
+      const ledgerSum = Number(wallet.ledger_sum_minor);
+      body.verified = balance === ledgerSum;
+      body.ledger_sum_minor = ledgerSum;
+    }
+    return response.json(body);
+  });
 }

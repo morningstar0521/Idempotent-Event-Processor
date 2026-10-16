@@ -163,7 +163,7 @@ Tasks:
 3. `src/api/routes/admin.ts`: `GET /v1/dlq` (paging) and `POST /v1/dlq/:eventId/replay` (conditional update, then `XADD`).
 4. Metrics: `events_failed_total{kind}`, `events_retried_total`, `events_dead_total{reason}`, `delayed_size`.
 
-Tests: U-5, U-6, I-RTY-1 to I-RTY-9 (I-RTY-10 may wait for Phase 5 because it needs the sweeper).
+Tests: U-5, U-6, I-WRK-6, I-WRK-8, I-RTY-1 to I-RTY-9 (I-RTY-10 may wait for Phase 5 because it needs the sweeper).
 
 Exit criteria:
 

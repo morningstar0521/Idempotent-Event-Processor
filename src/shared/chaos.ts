@@ -1,3 +1,5 @@
+import { config } from './config.js';
+
 export class SimulatedCrash extends Error {
   constructor() {
     super('simulated crash');
@@ -9,7 +11,7 @@ type ChaosOptions = { crash?: boolean; crashAfterRelayXadd?: boolean; pauseAt?: 
 let options: ChaosOptions = {};
 
 function enabled(): boolean {
-  return process.env.NODE_ENV === 'test' && process.env.CHAOS_ENABLED === 'true';
+  return process.env.CHAOS_ENABLED === 'true';
 }
 
 export function configure(next: ChaosOptions): void {
@@ -17,18 +19,20 @@ export function configure(next: ChaosOptions): void {
 }
 
 export function failBeforeEffect(): void {
-  if (enabled() && options.failCounter && options.failCounter > 0) {
+  if (!enabled()) return;
+  if (options.failCounter !== undefined) {
+    if (options.failCounter <= 0) return;
     options.failCounter -= 1;
-    throw new Error('simulated transient failure');
-  }
+  } else if (Math.random() >= config.CHAOS_FAIL_PROB) return;
+  throw new TransientError('simulated transient failure');
 }
 
 export function crashBeforeCommit(): void {
-  if (enabled() && options.crash) throw new SimulatedCrash();
+  crash(options.crash ?? Math.random() < config.CHAOS_CRASH_BEFORE_COMMIT_PROB);
 }
 
 export function crashAfterCommit(): void {
-  if (enabled() && options.crash) throw new SimulatedCrash();
+  crash(options.crash ?? Math.random() < config.CHAOS_CRASH_AFTER_COMMIT_PROB);
 }
 
 export function crashAfterRelayXadd(): void {
@@ -36,11 +40,22 @@ export function crashAfterRelayXadd(): void {
 }
 
 export async function pause(point: 'before_tx' | 'inside_tx'): Promise<void> {
-  void point;
-  return;
+  if (!enabled() || (options.pauseAt && options.pauseAt !== point) || (!options.pauseAt && process.env.NODE_ENV !== 'test' && point !== 'before_tx')) return;
+  const delay = config.CHAOS_PAUSE_MS;
+  if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
 }
 
 export function reset(): void {
   options = {};
+}
+
+function crash(shouldCrash = false): void {
+  if (!enabled() || !shouldCrash) return;
+  if (process.env.NODE_ENV === 'test') throw new SimulatedCrash();
+  process.kill(process.pid, 'SIGKILL');
+}
+
+class TransientError extends Error {
+  readonly kind = 'transient' as const;
 }
 

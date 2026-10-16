@@ -112,12 +112,12 @@ INV-8 needs a deterministic model. For chaos and load runs, seed each merchant w
 | I-WRK-3 | Same event delivered 20 times (XADD the same event_id 20 times) with 5 workers | 1 effect. `duplicates_blocked{layer=lock}` plus `db_status` account for the other 19 | F5, FR-8 |
 | I-WRK-4 | Event already `processed`, message arrives again | No-op, acked, `db_status` counter increments | F7, FR-8 |
 | I-WRK-5 | Call `applyEffect` twice in two separate transactions for one event id (bypass the status check on purpose) | Second ledger insert conflicts on `event_id`, wallet is not credited twice, `ledger_constraint` counter increments | Layer 4 |
-| I-WRK-6 | Payout with insufficient funds | Status `dead`, `attempts=1`, `last_error=INSUFFICIENT_FUNDS`, kind `permanent`, no retry scheduled (`events:delayed` empty), message acked | F10, FR-10 |
 | I-WRK-7 | Effect throws midway (after wallet update, before event status update) | Whole transaction rolled back: no ledger row, no wallet change | Atomicity |
-| I-WRK-8 | Unknown event type or payload that fails the schema at the worker (insert directly into DB) | `dead`, permanent | ARCHITECTURE 7 |
 | I-WRK-9 | Ack ordering: assert via a Redis spy that `XACK` is never called before the transaction commit | Pass in both success and failure paths | AGENTS rule 6 |
 | I-WRK-10 | Lock helper: acquire, second acquire fails, release with wrong token does nothing, release with right token works, TTL is always set | Pass | AGENTS rule 8 |
 | I-WRK-11 | Heartbeat renews TTL while handler runs longer than `LOCK_TTL_MS` | Lock key still held after 2x TTL. Stops renewing after handler ends | ARCHITECTURE 5 |
+
+I-WRK-6 and I-WRK-8 require the Phase 4 `handleFailure` implementation and are specified in §5.4.
 
 ### 5.4 Retry, DLQ, replay
 
@@ -133,6 +133,8 @@ INV-8 needs a deterministic model. For chaos and load runs, seed each merchant w
 | I-RTY-8 | Replay the same dead event 20 times in parallel | Exactly one 202, the rest 409 `NOT_REPLAYABLE`, one stream message added | F15, FR-15 |
 | I-RTY-9 | Replay a `processed` event or an unknown id | 409 `NOT_REPLAYABLE` | API.md |
 | I-RTY-10 | Replay when Redis is down at `XADD` time | Event is `retrying` in Postgres. Sweeper picks it up later and it processes | ARCHITECTURE 9 |
+| I-WRK-6 | Payout with insufficient funds | Status `dead`, `attempts=1`, `last_error=INSUFFICIENT_FUNDS`, kind `permanent`, no retry scheduled (`events:delayed` empty), message acked | F10, FR-10 |
+| I-WRK-8 | Unknown event type or payload that fails the schema at the worker (insert directly into DB) | `dead`, permanent | ARCHITECTURE 7 |
 
 ### 5.5 Reaper and sweeper
 

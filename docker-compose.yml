@@ -61,6 +61,21 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  worker:
+    build: .
+    environment:
+      CMD: worker
+      NODE_ENV: development
+      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@postgres:5432/events}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      METRICS_PORT: 9101
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:

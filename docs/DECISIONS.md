@@ -130,6 +130,7 @@ Each decision is final for v1. The agent must not reverse any of them. If a deci
 ### D27. One Docker image, three entrypoints (api, relay, worker)
 - Why: one build, one dependency set, simple CI. Compose picks the command. `docker compose up --scale worker=3` shows many workers.
 - Do not publish worker metrics ports to the host in Compose (scaling would cause port clashes). Prometheus scrapes inside the network.
+- Worker and relay metrics are network-internal and are not published to the host.
 
 ### D28. Chaos is built into the code behind flags, with a production guard
 - Why: crash-after-commit and lock expiry cannot be tested from outside. Hooks make them repeatable.
