@@ -1,7 +1,8 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { configure, reset } from '../../src/shared/chaos.js';
 import { pollOnce } from '../../src/relay/relay.js';
-import { closeTestResources, resetTestState, testQuery, testRedis, testWithTx } from './setup.js';
+import { sweepOnce } from '../../src/relay/sweeper.js';
+import { closeTestResources, resetTestState, testPool, testQuery, testRedis, testWithTx } from './setup.js';
 
 const stream = 'events:stream';
 
@@ -81,5 +82,40 @@ describe.sequential('relay', () => {
     expect(values[0]).toBe('event_id');
     expect(values[2]).toBe('type');
     expect(values).not.toContain('payload');
+  });
+
+  it('I-SWP-1 requeues stale received events and bumps updated_at', async () => {
+    const event = await testQuery<{ id: string; updated_at: Date }>(
+      `INSERT INTO events (idempotency_key, type, payload, payload_hash, updated_at)
+       VALUES ('sweep-1', 'payment.captured', '{}', 'sweep-hash-1', now() - interval '5 minutes')
+       RETURNING id, updated_at`,
+    );
+    expect(await sweepOnce({ redisClient: testRedis, poolClient: testPool })).toBe(1);
+    expect((await testRedis.xlen(stream))).toBe(1);
+    const current = await testQuery<{ updated_at: Date }>('SELECT updated_at FROM events WHERE id = $1', [event.rows[0].id]);
+    expect(current.rows[0].updated_at.getTime()).toBeGreaterThan(event.rows[0].updated_at.getTime());
+    expect(await sweepOnce({ redisClient: testRedis, poolClient: testPool })).toBe(0);
+  });
+
+  it('I-SWP-3 lets only one concurrent sweeper claim the advisory lock', async () => {
+    await testQuery(
+      `INSERT INTO events (idempotency_key, type, payload, payload_hash, updated_at)
+       VALUES ('sweep-2', 'payment.captured', '{}', 'sweep-hash-2', now() - interval '5 minutes')`,
+    );
+    const results = await Promise.all([
+      sweepOnce({ redisClient: testRedis, poolClient: testPool }),
+      sweepOnce({ redisClient: testRedis, poolClient: testPool }),
+    ]);
+    expect(results.sort()).toEqual([0, 1]);
+    expect(await testRedis.xlen(stream)).toBe(1);
+  });
+
+  it('I-SWP-4 does not touch fresh events', async () => {
+    await testQuery(
+      `INSERT INTO events (idempotency_key, type, payload, payload_hash)
+       VALUES ('sweep-3', 'payment.captured', '{}', 'sweep-hash-3')`,
+    );
+    expect(await sweepOnce({ redisClient: testRedis, poolClient: testPool })).toBe(0);
+    expect(await testRedis.xlen(stream)).toBe(0);
   });
 });
