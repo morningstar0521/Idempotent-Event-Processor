@@ -43,8 +43,8 @@ export async function startStack(options: StackOptions = {}): Promise<Stack> {
       handleFn: (message) => handle(message, {
         redisClient: testRedis,
         withTxFn: testWithTx,
-        pauseFn: options.pauseWorkerId === index ? pause : async () => undefined,
-        startHeartbeatFn: options.disableHeartbeatWorkerId === index
+        pauseFn: options.pauseWorkerId === -1 || options.pauseWorkerId === index ? pause : async () => undefined,
+        startHeartbeatFn: options.disableHeartbeatWorkerId === -1 || options.disableHeartbeatWorkerId === index
           ? (() => ({ stop: () => undefined, lostLock: false }) as Heartbeat)
           : startHeartbeat,
       }),

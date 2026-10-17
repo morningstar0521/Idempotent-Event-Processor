@@ -114,7 +114,9 @@ export class Reaper {
       if (this.current) return;
       this.current = reclaimOnce(this.dependencies)
         .then(() => undefined)
-        .catch((error) => logger.error({ err: error }, 'reaper cycle failed'))
+        .catch((error) => {
+          if (!(error instanceof Error && error.message.includes('NOGROUP'))) logger.error({ err: error }, 'reaper cycle failed');
+        })
         .finally(() => { this.current = undefined; });
     }, Math.max(100, Math.floor(config.VISIBILITY_TIMEOUT_MS / 2)));
   }

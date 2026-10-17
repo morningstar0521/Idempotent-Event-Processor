@@ -16,6 +16,7 @@ type LoadOptions = { onHalf?: () => Promise<void>; extraKeys?: number; skipModel
 
 async function counterValue(counter: { get(): Promise<unknown> }, labels: Record<string, string> = {}): Promise<number> {
   const metric = await counter.get() as { values: Array<{ labels: Record<string, string | number>; value: number }> };
+  if (Object.keys(labels).length === 0) return metric.values.reduce((total, item) => total + Number(item.value), 0);
   const value = metric.values.find((item) => Object.entries(labels).every(([key, expected]) => item.labels[key] === expected));
   return Number(value?.value ?? 0);
 }
@@ -145,8 +146,17 @@ describe.sequential('Phase 6 chaos lite', () => {
   it('C-3b pause inside transaction records row-lock wait', async () => {
     enable(); configure({ pauseInsideTx: { durationMs: 2000 } });
     const before = await counterBaseline();
-    stack = await startStack({ workers: 3, concurrency: 5, pauseWorkerId: 0, disableHeartbeatWorkerId: 0 });
-    await runSeededScenario(stack, 'C-3b', 300);
+    stack = await startStack({ workers: 3, concurrency: 5, pauseWorkerId: -1, disableHeartbeatWorkerId: -1 });
+    const expected = await seedWallets(merchants, 1_000_000, stack.api.url);
+    const lockEvent = makeEvent(9100);
+    const lockEventId = await insertQueuedEvent('c3b-lock', lockEvent);
+    expected.set(lockEvent.payload.merchant_id, (expected.get(lockEvent.payload.merchant_id) ?? 0) + lockEvent.payload.amount_minor);
+    await publishQueuedEvent(lockEventId);
+    await testRedis.xadd('events:stream', '*', 'event_id', lockEventId);
+    await testRedis.xadd('events:stream', '*', 'event_id', lockEventId);
+    await loadEvents(stack, 300, expected);
+    await waitForDrain();
+    await assertInvariants({ balances: expected, keys: merchants.length + 301 });
     expect(await counterValue(chaosFires, { cause: 'pause_inside_tx' })).toBeGreaterThan(before.pauseInside);
     expect(await counterValue(lockTimeoutWaits)).toBeGreaterThan(before.lockWait);
     await report('C-3b', before);
@@ -220,7 +230,7 @@ describe.sequential('Phase 6 chaos lite', () => {
   }, 120000);
 
   it('C-9 same-key storm creates one event and one effect', async () => {
-    enable(); configure({ crashBeforeCommit: { prob: 0.1 } });
+    enable(); configure({ crashBeforeCommit: { prob: 1 } });
     const before = await counterBaseline();
     stack = await startStack({ workers: 3, concurrency: 5 });
     const event = makeEvent(9000);
