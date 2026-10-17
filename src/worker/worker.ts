@@ -37,11 +37,7 @@ export class Worker {
   }
 
   async start(): Promise<void> {
-    try {
-      await this.redisClient.xgroup('CREATE', STREAM, GROUP, '0', 'MKSTREAM');
-    } catch (error) {
-      if (!(error instanceof Error && error.message.includes('BUSYGROUP'))) throw error;
-    }
+    await this.ensureGroup();
     this.loopPromise = this.run();
     this.mover = startDelayedMover(this.redisClient);
     this.reaper.start();
@@ -59,14 +55,29 @@ export class Worker {
 
   private async run(): Promise<void> {
     while (!this.stopped) {
-      const result = await this.redisClient.xreadgroup(
-        'GROUP', GROUP, this.consumerName, 'COUNT', String(this.concurrency), 'BLOCK', '1000', 'STREAMS', STREAM, '>',
-      ) as Array<[string, Array<[string, string[]]>]> | null;
+      let result: Array<[string, Array<[string, string[]]>]> | null;
+      try {
+        result = await this.redisClient.xreadgroup(
+          'GROUP', GROUP, this.consumerName, 'COUNT', String(this.concurrency), 'BLOCK', '1000', 'STREAMS', STREAM, '>',
+        ) as Array<[string, Array<[string, string[]]>]> | null;
+      } catch (error) {
+        if (!(error instanceof Error && error.message.includes('NOGROUP'))) throw error;
+        await this.ensureGroup();
+        continue;
+      }
       await this.updatePending();
       await moveDue(this.redisClient);
       if (!result) continue;
       const messages = result[0]?.[1] ?? [];
       await Promise.all(messages.map(([id, fields]) => this.dispatch({ id, event_id: fields[fields.indexOf('event_id') + 1] })));
+    }
+  }
+
+  private async ensureGroup(): Promise<void> {
+    try {
+      await this.redisClient.xgroup('CREATE', STREAM, GROUP, '0', 'MKSTREAM');
+    } catch (error) {
+      if (!(error instanceof Error && error.message.includes('BUSYGROUP'))) throw error;
     }
   }
 
