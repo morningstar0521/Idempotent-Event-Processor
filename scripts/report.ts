@@ -8,7 +8,7 @@ import type { LoadPlan } from './load/plan.js';
 const exec = promisify(execFile);
 const [summaryPath, snapshotPath, planPath, invariantPath] = process.argv.slice(2);
 if (!summaryPath || !snapshotPath || !planPath || !invariantPath) throw new Error('Usage: tsx scripts/report.ts <summary> <metrics> <plan> <invariants>');
-type K6Summary = { metrics: Record<string, { values: Record<string, number> }> };
+type K6Summary = { metrics: Record<string, Record<string, number> & { values?: Record<string, number> }> };
 type Snapshots = { before: Record<string, string[]>; after: Record<string, string[]> };
 type Invariants = { status: string; invariants: Array<{ id: string; status: string }> };
 const [summary, snapshots, plan, invariants] = await Promise.all([
@@ -16,6 +16,11 @@ const [summary, snapshots, plan, invariants] = await Promise.all([
 ]);
 if (invariants.status !== 'PASS') throw new Error('Refusing to write RESULTS.md because invariants did not pass');
 const pool = new Pool({ connectionString: process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/events' });
+process.once('uncaughtException', async (error) => {
+  await pool.end();
+  console.error(error);
+  process.exitCode = 1;
+});
 
 async function readJson<T>(path: string): Promise<T> {
   if (!path) throw new Error('Missing report source path');
@@ -45,11 +50,13 @@ function metricValue(snapshot: Record<string, string[]>, metric: string, labels 
 }
 
 function counter(name: string): number {
-  return number(summary.metrics?.[name]?.values?.count, name);
+  const metric = summary.metrics?.[name];
+  return number(metric?.values?.count ?? metric?.count, name);
 }
 
 function percentile(name: string, key: string): number {
-  return number(summary.metrics?.[name]?.values?.[key], `${name}.${key}`);
+  const metric = summary.metrics?.[name];
+  return number(metric?.values?.[key] ?? metric?.[key], `${name}.${key}`);
 }
 
 function format(value: number): string { return Number.isInteger(value) ? String(value) : value.toFixed(2); }
@@ -75,7 +82,7 @@ const e2e = await pool.query<{ p50: number; p95: number; p99: number }>(`SELECT
 if (db.rows[0].unfinished !== '0') throw new Error(`Unfinished events: ${db.rows[0].unfinished}`);
 if (db.rows[0].ledger !== db.rows[0].processed) throw new Error(`Ledger mismatch: ${db.rows[0].ledger} vs ${db.rows[0].processed}`);
 if (!e2e.rows[0].p95) throw new Error('Missing end-to-end latency query result');
-const rate = Number(summary.metrics?.http_reqs?.values?.rate);
+const rate = Number(summary.metrics?.http_reqs?.values?.rate ?? summary.metrics?.http_reqs?.rate);
 if (!Number.isFinite(rate)) throw new Error('Missing measured ingest rate');
 const processedRate = await pool.query<{ rate: number }>(`SELECT count(*) / NULLIF(extract(epoch FROM max(processed_at) - min(created_at)), 0) AS rate FROM events WHERE idempotency_key = ANY($1::text[]) AND status = 'processed'`, [plan.requests.map((request) => request.key).concat(plan.scenario === 'same_key_storm' ? ['same-key-storm'] : [])]);
 if (!Number.isFinite(processedRate.rows[0].rate)) throw new Error('Missing measured processed rate');
