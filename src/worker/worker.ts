@@ -78,7 +78,13 @@ export class Worker {
       await moveDue(this.redisClient);
       if (!result) continue;
       const messages = result[0]?.[1] ?? [];
-      await Promise.all(messages.map(([id, fields]) => this.dispatch({ id, event_id: fields[fields.indexOf('event_id') + 1] })));
+      await Promise.all(messages.map(async ([id, fields]) => {
+        try {
+          await this.dispatch({ id, event_id: fields[fields.indexOf('event_id') + 1] });
+        } catch {
+          // A simulated crash leaves the message pending for the reaper.
+        }
+      }));
     }
   }
 
