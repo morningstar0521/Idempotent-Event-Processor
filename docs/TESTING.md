@@ -257,26 +257,26 @@ Gates (a run fails if any is true): any invariant fails, any event ends neither 
 
 ## 8. Mapping: failure matrix to tests
 
-| Row | Tests |
-|---|---|
-| F1 | I-API-4, I-API-5, C-9 |
+| Row | Tests | Passing evidence |
+|---|---|---|
+| F1 | I-API-4, I-API-5, C-9 | one event, one ledger row, API duplicate count 499 |
 | F2 | I-API-3 |
 | F3 | I-API-2 |
-| F4 | I-REL-3, C-6 |
+| F4 | I-REL-3, C-6 | relay hook counter and duplicate stream message counter |
 | F5 | I-WRK-3 |
-| F6 | I-RPR-1, C-1, CF-1 |
-| F7 | I-WRK-4, C-2 |
-| F8 | I-WRK-11, C-3a, C-3b |
-| F9 | I-RTY-1, C-7 |
+| F6 | I-RPR-1, C-1, CF-1 | reclaimed messages and all final statuses |
+| F7 | I-WRK-4, C-2 | `duplicates_blocked{layer="db_status"}` above zero |
+| F8 | I-WRK-11, C-3a, C-3b | lock recovery and row-lock wait counters above zero |
+| F9 | I-RTY-1, C-7 | retry counter above zero and final-state invariant |
 | F10 | I-WRK-6 |
-| F11 | I-RTY-2, C-7 |
-| F12 | I-RPR-2, C-5 |
-| F13 | I-SWP-1, I-SWP-2, C-4, CF-2 |
-| F14 | I-API-12, I-RTY-5, CF-4 |
+| F11 | I-RTY-2, C-7 | max-attempt dead counter above zero and no dead ledger |
+| F12 | I-RPR-2, C-5 | one max-delivery dead event and counter delta 1 |
+| F13 | I-SWP-1, I-SWP-2, C-4, CF-2 | sweeper counter above zero and measured recovery time |
+| F14 | I-API-12, I-RTY-5, CF-4 | 503 during dependency outage and no lost events |
 | F15 | I-RTY-8 |
-| F16 | I-SHD-1, I-SHD-2, CF-5 |
+| F16 | I-SHD-1, I-SHD-2, CF-5 | graceful exit and final-state invariant |
 
-Invariant coverage in the chaos suite:
+Invariant coverage in the chaos suite. Each listed C test calls `assertInvariants`; INV-9 is intentionally checked only at end-of-run after the cleanup TTL:
 
 | Invariant | Tests that assert it |
 |---|---|

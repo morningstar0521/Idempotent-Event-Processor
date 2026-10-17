@@ -107,6 +107,16 @@ The Phase 1 API suite verifies validation, authentication, duplicate requests, c
 
 Chaos runs print a reproducible seed and finish with INV-1 through INV-10. A flaky chaos result is treated as a bug and must be investigated with its seed.
 
+### Chaos demo
+
+```bash
+pnpm test:chaos
+CHAOS_SEED=123 pnpm test:chaos
+pnpm test:chaos:full
+```
+
+The lite run is CI-safe and in-process. The full run starts the Compose stack, sends real duplicate load, injects Docker failures, waits for final states, and writes `scripts/chaos/results.json`.
+
 ## Project documentation
 
 - [Product requirements](docs/PRD.md)

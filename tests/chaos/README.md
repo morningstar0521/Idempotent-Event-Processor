@@ -10,4 +10,10 @@ pnpm test:chaos:full
 
 Every run prints `CHAOS_SEED`. A failing seed is reproducible input, not a reason to retry until it turns green. A flaky chaos test is a bug in the code or the test and must be diagnosed.
 
-The lite scenarios cover C-1 through C-9 and map to F6, F7, F8, F13, F12, F4, F9/F11, all rows, and F1/F6 respectively. Full scenarios CF-1 through CF-6 use Docker actions and write `scripts/chaos/results.json`.
+Each lite scenario prints a structured line with the hook count, final processed/dead counts, duplicate-block counters, recovery time, and `INV=PASS`, for example:
+
+```text
+[C-4] chaos_fires=... processed=... dead=... dup_blocked={api:...,db_status:...,lock:...} recovery_ms=... INV=PASS
+```
+
+The lite scenarios cover C-1 through C-9 and map to F6, F7, F8, F13, F12, F4, F9/F11, all rows, and F1/F6 respectively. Full scenarios CF-1 through CF-6 use real Docker load, failure injection, drain measurement, invariant checks, and write `scripts/chaos/results.json`.
