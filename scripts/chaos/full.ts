@@ -16,7 +16,7 @@ function compose(args: string[]): string {
   return execFileSync('docker', ['compose', ...args], {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, LOCK_TTL_MS: '1500', VISIBILITY_TIMEOUT_MS: '1500', RELAY_POLL_MS: '20', BACKOFF_BASE_MS: '20', BACKOFF_CAP_MS: '200', SWEEP_INTERVAL_MS: '500', SWEEP_STALE_MS: '1000', MAX_ATTEMPTS: '5', MAX_DELIVERIES: '5' },
+    env: process.env,
   }).trim();
 }
 async function reset(): Promise<void> {
@@ -88,12 +88,16 @@ try {
   compose(['up', '-d', '--build', '--scale', 'worker=3']);
   execFileSync('pnpm', ['migrate'], { stdio: 'inherit' });
   await runScenario('CF-1', async () => { killWorker(); }, true);
-  await runScenario('CF-2', async () => { compose(['exec', '-T', 'redis', 'redis-cli', 'FLUSHALL']); });
+  await runScenario('CF-2', async () => {
+    compose(['exec', '-T', 'redis', 'redis-cli', 'FLUSHALL']);
+    compose(['exec', '-T', 'postgres', 'psql', '-U', 'postgres', '-d', 'events', '-c', "UPDATE events SET updated_at = now() - interval '2 minutes' WHERE status IN ('received', 'retrying')"]);
+  });
   await runScenario('CF-3', async () => { compose(['restart', 'redis']); });
   await runScenario('CF-4', async () => { compose(['restart', 'postgres']); });
   await runScenario('CF-5', async () => { const worker = workerIds()[0]; if (!worker) throw new Error('No worker container'); execFileSync('docker', ['stop', worker], { stdio: 'pipe' }); });
   await runScenario('CF-6', async () => {
     compose(['exec', '-T', 'redis', 'redis-cli', 'FLUSHALL']);
+    compose(['exec', '-T', 'postgres', 'psql', '-U', 'postgres', '-d', 'events', '-c', "UPDATE events SET updated_at = now() - interval '2 minutes' WHERE status IN ('received', 'retrying')"]);
     await new Promise((resolve) => setTimeout(resolve, 5000));
     killWorker();
   }, true);
