@@ -49,8 +49,9 @@ function metricValue(snapshot: Record<string, string[]>, metric: string, labels 
   return total;
 }
 
-function counter(name: string): number {
+function counter(name: string, allowMissing = false): number {
   const metric = summary.metrics?.[name];
+  if (!metric && allowMissing) return 0;
   return number(metric?.values?.count ?? metric?.count, name);
 }
 
@@ -66,8 +67,8 @@ const after = snapshots.after as Record<string, string[]>;
 const totalRequests = counter('http_reqs');
 const created = counter('responses_202');
 const duplicates = counter('responses_200');
-const errors = counter('responses_errors');
-const reused = counter('responses_422');
+const errors = counter('responses_errors', true);
+const reused = counter('responses_422', true);
 if (errors !== 0 || reused !== 0) throw new Error(`Measured request errors: errors=${errors}, 422=${reused}`);
 const db = await pool.query<{ processed: string; dead: string; unfinished: string; ledger: string }>(`SELECT
   (SELECT count(*) FROM events WHERE idempotency_key = ANY($1::text[]) AND status = 'processed')::text AS processed,
