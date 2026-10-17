@@ -36,7 +36,7 @@ function metricValue(snapshot: Record<string, string[]>, metric: string, labels 
   let total = 0;
   let found = false;
   let declared = false;
-  for (const text of Object.values(snapshot)) for (const line of text) {
+  for (const text of Object.values(snapshot)) for (const line of text.flatMap((value) => value.split('\n'))) {
     if (line === `# TYPE ${metric} counter` || line === `# TYPE ${metric} gauge`) declared = true;
     if (line.startsWith('#') || !line.startsWith(metric)) continue;
     const match = line.match(new RegExp(`^${metric}(?:\\{([^}]*)\\})?\\s+([0-9.eE+-]+)$`));
