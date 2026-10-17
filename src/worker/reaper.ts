@@ -68,6 +68,29 @@ async function claimPending(
   return await redisClient.xclaim(STREAM, GROUP, consumerName, config.VISIBILITY_TIMEOUT_MS, ...ids) as Array<[string, string[]]>;
 }
 
+async function recordCrashDelivery(
+  message: StreamMessage,
+  redisClient: Redis,
+  queryFn: typeof query,
+): Promise<void> {
+  const result = await queryFn(
+    `UPDATE events
+        SET attempts = attempts + 1,
+            last_error = CASE WHEN attempts + 1 >= $2 THEN 'max deliveries exceeded' ELSE 'simulated crash' END,
+            last_error_kind = CASE WHEN attempts + 1 >= $2 THEN 'permanent' ELSE 'transient' END,
+            status = CASE WHEN attempts + 1 >= $2 THEN 'dead' ELSE status END,
+            updated_at = now()
+      WHERE id = $1 AND status <> 'processed'
+      RETURNING status`,
+    [message.event_id, config.MAX_DELIVERIES],
+  );
+  if (result.rows[0]?.status === 'dead') {
+    eventsDead.inc({ reason: 'max_deliveries' });
+    await redisClient.xack(STREAM, GROUP, message.id);
+    await redisClient.xdel(STREAM, message.id);
+  }
+}
+
 export async function reclaimOnce(dependencies: ReaperDependencies): Promise<number> {
   const redisClient = dependencies.redisClient ?? redis;
   const handleFn = dependencies.handleFn ?? handle;
@@ -96,6 +119,9 @@ export async function reclaimOnce(dependencies: ReaperDependencies): Promise<num
       await handleFn(message);
       await removeTerminalMessage(message, redisClient, queryFn);
     } catch (error) {
+      if (error instanceof Error && error.name === 'SimulatedCrash') {
+        await recordCrashDelivery(message, redisClient, queryFn);
+      }
       logger.error({ err: error, event_id: message.event_id, msg_id: message.id }, 'reaper message handling failed');
     }
   }));
