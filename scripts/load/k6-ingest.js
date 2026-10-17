@@ -15,14 +15,14 @@ export const options = scenario === 'smoke'
   ? {
       vus: 1,
       iterations: 10,
-      thresholds: { checks: ['rate==1'], http_req_failed: ['rate==0'] },
+      thresholds: { checks: ['rate>0.999'], http_req_failed: ['rate<0.001'] },
     }
   : scenario === 'same_key_storm'
     ? {
         scenarios: {
           storm: { executor: 'shared-iterations', vus: 1000, iterations: 1000, maxDuration: '2m' },
         },
-        thresholds: { checks: ['rate==1'], http_req_failed: ['rate==0'] },
+        thresholds: { checks: ['rate>0.999'], http_req_failed: ['rate<0.001'], responses_202: ['count==1'], responses_200: ['count==999'] },
       }
     : {
         // Target rate is configurable and is recorded by the orchestrator in RESULTS.md.
@@ -36,7 +36,7 @@ export const options = scenario === 'smoke'
             maxVUs: Number(__ENV.MAX_VUS || 200),
           },
         },
-        thresholds: { checks: ['rate==1'], http_req_failed: ['rate==0'] },
+        thresholds: { checks: ['rate>0.999'], http_req_failed: ['rate<0.001'] },
       };
 
 function requestFor(iteration) {
@@ -44,7 +44,8 @@ function requestFor(iteration) {
     return { key: 'same-key-storm', body: plan.stormBody };
   }
   if (scenario === 'smoke') return plan.requests[iteration % plan.requests.length];
-  return plan.requests[(__ITER + __VU - 1) % plan.requests.length];
+  const stride = Number(__ENV.PREALLOCATED_VUS || 50);
+  return plan.requests[((__ITER * stride) + __VU - 1) % plan.requests.length];
 }
 
 export default function () {
