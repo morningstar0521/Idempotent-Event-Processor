@@ -4,6 +4,7 @@ import { metricsContent } from '../shared/metrics.js';
 import { redis } from '../shared/redis.js';
 import { pool } from '../shared/db.js';
 import { Worker } from '../worker/worker.js';
+import { releaseHeldLocks } from '../worker/handler.js';
 
 const metrics = express();
 metrics.get('/metrics', async (_request, response) => {
@@ -26,7 +27,9 @@ async function stop(): Promise<void> {
   const finished = worker.stop().then(() => 'finished' as const);
   const result = await Promise.race([finished, grace]);
   if (result === 'grace') {
-    process.exitCode = 1;
+    await releaseHeldLocks();
+    await Promise.allSettled([pool.end(), redis.quit()]);
+    process.exit(1);
   } else {
     await loop;
     await new Promise<void>((resolve, reject) => metricsServer.close((error) => error ? reject(error) : resolve()));

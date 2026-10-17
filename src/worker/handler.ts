@@ -13,6 +13,7 @@ import { handleFailure, type FailureDependencies } from './retry.js';
 
 const STREAM = 'events:stream';
 const GROUP = 'workers';
+const heldLocks = new Map<string, { key: string; token: string; redisClient: Redis }>();
 
 export interface StreamMessage {
   id: string;
@@ -76,6 +77,7 @@ export async function handle(msg: StreamMessage, dependencies: HandlerDependenci
     await ackAndDelete(msg, redisClient);
     return;
   }
+  heldLocks.set(msg.id, { key: lock.key, token: lock.token, redisClient });
 
   const hb = heartbeat(lock.key, lock.token, config.LOCK_TTL_MS);
   const started = process.hrtime.bigint();
@@ -99,8 +101,14 @@ export async function handle(msg: StreamMessage, dependencies: HandlerDependenci
   } finally {
     hb.stop();
     if (!simulatedCrash) await releaseLock(lock.key, lock.token);
+    heldLocks.delete(msg.id);
     processingDuration.observe(Number(process.hrtime.bigint() - started) / 1e9);
   }
+}
+
+export async function releaseHeldLocks(): Promise<void> {
+  await Promise.all([...heldLocks.values()].map(({ key, token, redisClient }) => release(key, token, redisClient)));
+  heldLocks.clear();
 }
 
 export async function closeHandlerResources(): Promise<void> {

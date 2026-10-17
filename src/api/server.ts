@@ -22,7 +22,8 @@ export function createApp(options: EventRouteOptions & AdminRouteOptions & { red
     const postgres = checks[0].status === 'fulfilled';
     const redisReady = checks[1].status === 'fulfilled';
     if (postgres && redisReady) return response.json({ status: 'ready' });
-    return response.status(503).json({ status: 'not_ready', postgres, redis: redisReady });
+    const failing = postgres ? 'redis' : redisReady ? 'postgres' : 'both';
+    return response.status(503).json({ status: 'not_ready', failing });
   });
   app.get('/metrics', async (_request, response) => {
     response.type('text/plain').send(await metricsContent());

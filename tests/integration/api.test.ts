@@ -188,4 +188,27 @@ describe.sequential('Phase 1 API', () => {
     const missing = await fetch(`${baseUrl}/v1/events/00000000-0000-0000-0000-000000000000`, { headers: { 'X-API-Key': apiKey } });
     expect(missing.status).toBe(404);
   });
+
+  it('I-API-14 names the dependency that makes readiness fail', async () => {
+    const redisDown = await listen(createApp({
+      queryFn: testQuery,
+      withTxFn: testWithTx,
+      redisClient: { ping: async () => { throw new Error('redis unavailable'); } } as never,
+    }));
+    const postgresDown = await listen(createApp({
+      queryFn: (async () => { throw new Error('postgres unavailable'); }) as typeof testQuery,
+      withTxFn: testWithTx,
+      redisClient: testRedis,
+    }));
+    try {
+      const redisResponse = await fetch(`${redisDown.url}/ready`);
+      expect(redisResponse.status).toBe(503);
+      expect(await redisResponse.json()).toEqual({ status: 'not_ready', failing: 'redis' });
+      const postgresResponse = await fetch(`${postgresDown.url}/ready`);
+      expect(postgresResponse.status).toBe(503);
+      expect(await postgresResponse.json()).toEqual({ status: 'not_ready', failing: 'postgres' });
+    } finally {
+      await Promise.all([redisDown.server, postgresDown.server].map((instance) => new Promise<void>((resolve, reject) => instance.close((error) => error ? reject(error) : resolve()))));
+    }
+  });
 });

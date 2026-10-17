@@ -4,7 +4,8 @@ import { config } from '../shared/config.js';
 import { streamPending } from '../shared/metrics.js';
 import { redis } from '../shared/redis.js';
 import { moveDue, startDelayedMover } from './delayed.js';
-import { handle, type StreamMessage } from './handler.js';
+import { handle, releaseHeldLocks, type StreamMessage } from './handler.js';
+import { Reaper } from './reaper.js';
 
 const STREAM = 'events:stream';
 const GROUP = 'workers';
@@ -25,12 +26,14 @@ export class Worker {
   private readonly consumerName: string;
   private readonly handleFn: typeof handle;
   private mover?: NodeJS.Timeout;
+  private readonly reaper: Reaper;
 
   constructor(options: WorkerOptions = {}) {
     this.redisClient = options.redisClient ?? redis;
     this.concurrency = options.concurrency ?? config.WORKER_CONCURRENCY;
     this.consumerName = options.consumerName ?? `${os.hostname()}-${process.pid}`;
     this.handleFn = options.handleFn ?? handle;
+    this.reaper = new Reaper({ redisClient: this.redisClient, consumerName: this.consumerName, handleFn: this.handleFn });
   }
 
   async start(): Promise<void> {
@@ -41,14 +44,17 @@ export class Worker {
     }
     this.loopPromise = this.run();
     this.mover = startDelayedMover(this.redisClient);
+    this.reaper.start();
     await this.loopPromise;
   }
 
   async stop(): Promise<void> {
     this.stopped = true;
     if (this.mover) globalThis.clearInterval(this.mover);
+    await this.reaper.stop();
     await this.loopPromise;
     await Promise.all([...this.active]);
+    await releaseHeldLocks();
   }
 
   private async run(): Promise<void> {
