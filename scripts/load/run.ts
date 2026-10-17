@@ -21,7 +21,7 @@ async function command(file: string, args: string[], options: { env?: NodeJS.Pro
 }
 
 async function getJson(path: string): Promise<Record<string, unknown>> {
-  const response = await fetch(`${baseUrl}${path}`);
+  const response = await fetch(`${baseUrl}${path}`, path.startsWith('/v1/') ? { headers: { 'X-API-Key': apiKey } } : undefined);
   if (!response.ok) throw new Error(`${path} returned ${response.status}`);
   return await response.json() as Record<string, unknown>;
 }
