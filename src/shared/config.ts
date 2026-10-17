@@ -41,6 +41,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (result.data.NODE_ENV === 'production' && result.data.CHAOS_ENABLED) {
     throw new Error('CHAOS_ENABLED cannot be true in production');
   }
+  if (result.data.SWEEP_STALE_MS <= result.data.BACKOFF_CAP_MS) {
+    throw new Error('SWEEP_STALE_MS must be greater than BACKOFF_CAP_MS');
+  }
   return result.data;
 }
 
