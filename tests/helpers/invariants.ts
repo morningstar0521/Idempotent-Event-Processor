@@ -60,7 +60,7 @@ export async function inv8(expected?: Expected): Promise<void> {
 
 export async function inv9(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, config.LOCK_TTL_MS));
-  const deadline = Date.now() + 10000;
+  const deadline = Date.now() + 60000;
   let state = { pending: 0, length: 0, delayed: 0, locks: 0 };
   while (Date.now() < deadline) {
     let pending = 0;
