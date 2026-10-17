@@ -276,6 +276,21 @@ Gates (a run fails if any is true): any invariant fails, any event ends neither 
 | F15 | I-RTY-8 |
 | F16 | I-SHD-1, I-SHD-2, CF-5 |
 
+Invariant coverage in the chaos suite:
+
+| Invariant | Tests that assert it |
+|---|---|
+| INV-1 | C-1, C-2, C-6, C-9 |
+| INV-2 | C-1, C-2, C-4, C-8 |
+| INV-3 | C-1, C-2, C-7, C-9 |
+| INV-4 | C-1, C-4, C-7, C-8 |
+| INV-5 | C-1, C-2, C-5, C-7 |
+| INV-6 | C-1, C-3a, C-4, C-8 |
+| INV-7 | C-1, C-2, C-5, C-7 |
+| INV-8 | C-1, C-2, C-3a, C-8 |
+| INV-9 | C-1, C-2, C-3a, C-4, C-8, end-of-run only |
+| INV-10 | C-1, C-2, C-4, C-7 |
+
 ## 9. Mapping: acceptance criteria to tests
 
 | AC (PRD section 9) | Proof |

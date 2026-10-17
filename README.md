@@ -2,7 +2,7 @@
 
 A small production-style TypeScript backend for accepting payment events with at-least-once delivery and idempotent processing. Each unique idempotency key produces at most one business effect.
 
-The project uses PostgreSQL as the source of truth. Redis is used for delivery helpers, delayed retries, and worker coordination. The current implementation covers Phase 2: the ingest API, transactional outbox, and relay to a Redis Stream.
+The project uses PostgreSQL as the source of truth. Redis is used for delivery helpers, delayed retries, and worker coordination. The implementation includes the ingest API, transactional outbox, relay, workers, retries, recovery loops, and Phase 6 chaos invariants.
 
 ## Current status
 
@@ -22,7 +22,7 @@ Implemented:
 - Relay stream-length metrics on port 9102 by default
 - Multi-stage Docker image and Compose services for the API and relay
 
-Workers, retries, dead-letter handling, sweeper recovery, and load reports are planned for later phases.
+Chaos lite runs use the same API, relay, and worker factories as production entrypoints. Chaos full runs exercise Docker worker, Redis, and PostgreSQL failure actions locally.
 
 ## Architecture
 
@@ -96,11 +96,16 @@ pnpm typecheck
 pnpm lint
 pnpm test:unit
 pnpm test:integration
+pnpm test:chaos
+CHAOS_SEED=1 pnpm test:chaos
+pnpm test:chaos:full
 ```
 
 Integration tests create and migrate `events_test`, use a separate PostgreSQL pool, and flush Redis DB 15 between tests. The production `events` database is not used by the integration suite.
 
 The Phase 1 API suite verifies validation, authentication, duplicate requests, concurrent same-key requests, transactional outbox rollback, unavailable PostgreSQL handling, and event lookup. The Phase 2 relay suite verifies single-relay publishing, parallel relays with `SKIP LOCKED`, crash-after-publish recovery behavior, and stream message shape.
+
+Chaos runs print a reproducible seed and finish with INV-1 through INV-10. A flaky chaos result is treated as a bug and must be investigated with its seed.
 
 ## Project documentation
 
