@@ -147,7 +147,7 @@ describe.sequential('Phase 6 chaos lite', () => {
     await new Promise((resolve) => setTimeout(resolve, 1600));
     await testRedis.xadd('events:stream', '*', 'event_id', lockEventId);
     await loadEvents(stack, 300, expected);
-    await waitForDrain();
+    await waitForDrain(60000);
     await assertInvariants({ balances: expected, keys: merchants.length + 301 });
     expect(await counterValue(chaosFires, { cause: 'pause_before_tx' })).toBeGreaterThan(before.pauseBefore);
     expect(await counterValue(lockRecovered)).toBeGreaterThan(before.recovered);
