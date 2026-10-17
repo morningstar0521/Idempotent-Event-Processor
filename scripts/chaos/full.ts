@@ -87,6 +87,7 @@ async function runScenario(id: string, action: () => Promise<void>, intervalKill
 try {
   compose(['up', '-d', '--build', '--scale', 'worker=3']);
   execFileSync('pnpm', ['migrate'], { stdio: 'inherit' });
+  // CF-1 can take about 30s to reclaim in-flight messages because Docker uses the production visibility/lock TTL; repeated kills add to that drain time.
   await runScenario('CF-1', async () => { killWorker(); }, true);
   await runScenario('CF-2', async () => {
     compose(['exec', '-T', 'redis', 'redis-cli', 'FLUSHALL']);

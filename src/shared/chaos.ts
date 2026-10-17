@@ -97,6 +97,10 @@ export function poison(eventId: string): void {
   }
 }
 
+export function redisWipe(): void {
+  if (enabled()) chaosFires.inc({ cause: 'redis_wipe' });
+}
+
 export function reset(): void {
   options = {};
   firedOnce.clear();

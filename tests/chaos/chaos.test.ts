@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { configure, reset } from '../../src/shared/chaos.js';
+import { configure, redisWipe, reset } from '../../src/shared/chaos.js';
 import { chaosFires, duplicateStreamMessages, duplicatesBlocked, eventsDead, eventsRetried, lockRecovered, lockTimeoutWaits, sweeperRequeued } from '../../src/shared/metrics.js';
 import { startStack, type Stack } from '../helpers/startStack.js';
 import { assertInvariants } from '../helpers/invariants.js';
@@ -67,6 +67,8 @@ async function counterBaseline(): Promise<Record<string, number>> {
     pauseInside: await counterValue(chaosFires, { cause: 'pause_inside_tx' }),
     relayCrash: await counterValue(chaosFires, { cause: 'crash_relay_after_xadd' }),
     failBefore: await counterValue(chaosFires, { cause: 'fail_before_effect' }),
+    poison: await counterValue(chaosFires, { cause: 'poison_message' }),
+    redisWipe: await counterValue(chaosFires, { cause: 'redis_wipe' }),
     recovered: await counterValue(lockRecovered),
     lockWait: await counterValue(lockTimeoutWaits),
     swept: await counterValue(sweeperRequeued),
@@ -77,11 +79,27 @@ async function report(scenario: string, before: Record<string, number>, recovery
   const statuses = await testQuery<{ status: string; count: string }>('SELECT status, count(*)::text AS count FROM events GROUP BY status');
   const processed = Number(statuses.rows.find((row) => row.status === 'processed')?.count ?? 0);
   const dead = Number(statuses.rows.find((row) => row.status === 'dead')?.count ?? 0);
+  const delta = async (value: Promise<number>, baseline: number): Promise<number> => Math.round((await value) - baseline);
   const causes = Math.round((await counterValue(chaosFires)) - before.chaos);
   const dupApi = Math.round((await counterValue(duplicatesBlocked, { layer: 'api' })) - before.api);
   const dupDb = Math.round((await counterValue(duplicatesBlocked, { layer: 'db_status' })) - before.db);
   const dupLock = Math.round((await counterValue(duplicatesBlocked, { layer: 'lock' })) - before.lock);
-  console.log(`[${scenario}] chaos_fires=${causes} processed=${processed} dead=${dead} dup_blocked={api:${dupApi},db_status:${dupDb},lock:${dupLock}} recovery_ms=${recoveryMs} INV=PASS`);
+  const crashBefore = await delta(counterValue(chaosFires, { cause: 'crash_before_commit' }), before.crashBefore);
+  const crashAfter = await delta(counterValue(chaosFires, { cause: 'crash_after_commit' }), before.crashAfter);
+  const pauseBefore = await delta(counterValue(chaosFires, { cause: 'pause_before_tx' }), before.pauseBefore);
+  const pauseInside = await delta(counterValue(chaosFires, { cause: 'pause_inside_tx' }), before.pauseInside);
+  const relayCrash = await delta(counterValue(chaosFires, { cause: 'crash_relay_after_xadd' }), before.relayCrash);
+  const failBefore = await delta(counterValue(chaosFires, { cause: 'fail_before_effect' }), before.failBefore);
+  const poison = await delta(counterValue(chaosFires, { cause: 'poison_message' }), before.poison);
+  const redisWipe = await delta(counterValue(chaosFires, { cause: 'redis_wipe' }), before.redisWipe);
+  const recovered = await delta(counterValue(lockRecovered), before.recovered);
+  const lockWait = await delta(counterValue(lockTimeoutWaits), before.lockWait);
+  const swept = await delta(counterValue(sweeperRequeued), before.swept);
+  const stream = await delta(counterValue(duplicateStreamMessages), before.stream);
+  const retried = await delta(counterValue(eventsRetried), before.retried);
+  const maxAttempts = await delta(counterValue(eventsDead, { reason: 'max_attempts' }), before.maxAttempts);
+  const maxDeliveries = await delta(counterValue(eventsDead, { reason: 'max_deliveries' }), before.maxDeliveries);
+  console.log(`[${scenario}] chaos_fires=${causes} chaos_fires{cause="crash_before_commit"}=${crashBefore} chaos_fires{cause="crash_after_commit"}=${crashAfter} chaos_fires{cause="pause_before_tx"}=${pauseBefore} chaos_fires{cause="pause_inside_tx"}=${pauseInside} chaos_fires{cause="crash_relay_after_xadd"}=${relayCrash} chaos_fires{cause="fail_before_effect"}=${failBefore} chaos_fires{cause="poison_message"}=${poison} chaos_fires{cause="redis_wipe"}=${redisWipe} processed=${processed} dead=${dead} dup_blocked={api:${dupApi},db_status:${dupDb},lock:${dupLock}} lock_recovery=${recovered} row_lock_wait=${lockWait} sweeper_requeued=${swept} duplicate_stream_messages=${stream} events_retried=${retried} events_dead{reason="max_attempts"}=${maxAttempts} events_dead{reason="max_deliveries"}=${maxDeliveries} recovery_ms=${recoveryMs} INV=PASS`);
 }
 
 async function runSeededScenario(stack: Stack, scenario: string, count: number, options: LoadOptions = {}): Promise<void> {
@@ -180,7 +198,7 @@ describe.sequential('Phase 6 chaos lite', () => {
     const before = await counterBaseline();
     const started = Date.now();
     stack = await startStack({ workers: 3, concurrency: 5 });
-    await runSeededScenario(stack, 'C-4', 300, { onHalf: async () => { await testRedis.flushdb(); } });
+    await runSeededScenario(stack, 'C-4', 300, { onHalf: async () => { redisWipe(); await testRedis.flushdb(); } });
     const recoveryMs = Date.now() - started;
     expect(await counterValue(sweeperRequeued)).toBeGreaterThan(before.swept);
     expect(recoveryMs).toBeLessThan(30000);
@@ -235,7 +253,7 @@ describe.sequential('Phase 6 chaos lite', () => {
     enable(); configure({ crashBeforeCommit: { prob: 0.1 }, crashAfterCommit: { prob: 0.1 }, failBeforeEffect: { prob: 0.2 } });
     const before = await counterBaseline();
     stack = await startStack({ workers: 3, concurrency: 5 });
-    await runSeededScenario(stack, 'C-8', 300, { skipModel: true, onHalf: async () => { await testRedis.flushdb(); } });
+    await runSeededScenario(stack, 'C-8', 300, { skipModel: true, onHalf: async () => { redisWipe(); await testRedis.flushdb(); } });
     expect(await counterValue(chaosFires, { cause: 'crash_before_commit' })).toBeGreaterThan(before.crashBefore);
     expect(await counterValue(chaosFires, { cause: 'crash_after_commit' })).toBeGreaterThan(before.crashAfter);
     expect(await counterValue(chaosFires, { cause: 'fail_before_effect' })).toBeGreaterThan(before.failBefore);
