@@ -2,11 +2,11 @@ import type { Redis } from 'ioredis';
 import type { PoolClient } from 'pg';
 import { applyEffect } from '../domain/effects.js';
 import { PermanentError, TransientError } from '../domain/errors.js';
-import { failBeforeEffect, crashBeforeCommit, crashAfterCommit, pause } from '../shared/chaos.js';
+import { failBeforeEffect, crashBeforeCommit, crashAfterCommit, pause, poison } from '../shared/chaos.js';
 import { config } from '../shared/config.js';
 import { pool, withTx } from '../shared/db.js';
 import { logger } from '../shared/logger.js';
-import { duplicatesBlocked, eventsProcessed, processingDuration } from '../shared/metrics.js';
+import { duplicateStreamMessages, duplicatesBlocked, eventsProcessed, lockRecovered, lockTimeoutWaits, processingDuration } from '../shared/metrics.js';
 import { redis } from '../shared/redis.js';
 import { release, startHeartbeat, tryAcquire } from './lock.js';
 import { handleFailure, type FailureDependencies } from './retry.js';
@@ -28,6 +28,7 @@ export interface HandlerDependencies {
   startHeartbeatFn?: typeof startHeartbeat;
   releaseFn?: typeof release;
   handleFailureFn?: typeof handleFailure;
+  pauseFn?: typeof pause;
 }
 
 async function ackAndDelete(message: StreamMessage, redisClient: Redis): Promise<void> {
@@ -35,24 +36,29 @@ async function ackAndDelete(message: StreamMessage, redisClient: Redis): Promise
   await redisClient.xdel(STREAM, message.id);
 }
 
-export async function processInTx(id: string, lostLock = () => false, withTxFn: typeof withTx = withTx): Promise<'applied' | 'skipped'> {
+export async function processInTx(id: string, lostLock = () => false, withTxFn: typeof withTx = withTx, pauseFn: typeof pause = pause): Promise<'applied' | 'skipped'> {
   return withTxFn(async (client: PoolClient) => {
     await client.query("SET LOCAL lock_timeout = '5s'");
     await client.query("SET LOCAL statement_timeout = '10s'");
+    const lockWaitStarted = process.hrtime.bigint();
     const result = await client.query<{ status: string; type: string; payload: unknown }>(
       'SELECT status, type, payload FROM events WHERE id = $1 FOR UPDATE',
       [id],
     );
+    if (Number(process.hrtime.bigint() - lockWaitStarted) / 1e6 > 100) lockTimeoutWaits.inc();
     if (result.rowCount !== 1) throw new PermanentError('EVENT_NOT_FOUND');
     const row = result.rows[0];
     if (row.status === 'processed' || row.status === 'dead') {
       duplicatesBlocked.inc({ layer: 'db_status' });
+      duplicateStreamMessages.inc();
+      if (lostLock()) lockRecovered.inc();
       return 'skipped';
     }
-    await pause('inside_tx');
-    failBeforeEffect();
+    await pauseFn('inside_tx');
+    poison(id);
+    failBeforeEffect(id);
     await applyEffect(client, row.type, row.payload, id);
-    crashBeforeCommit();
+    crashBeforeCommit(id);
     if (lostLock()) throw new TransientError('REDIS_LOCK_LOST');
     await client.query(
       `UPDATE events
@@ -71,6 +77,7 @@ export async function handle(msg: StreamMessage, dependencies: HandlerDependenci
   const releaseLock = dependencies.releaseFn ?? ((key, token) => release(key, token, redisClient));
   const fail = dependencies.handleFailureFn ?? handleFailure;
   const withTxFn = dependencies.withTxFn ?? withTx;
+  const pauseFn = dependencies.pauseFn ?? pause;
   const lock = await acquire(`lock:event:${msg.event_id}`, config.LOCK_TTL_MS);
   if (!lock) {
     duplicatesBlocked.inc({ layer: 'lock' });
@@ -83,9 +90,9 @@ export async function handle(msg: StreamMessage, dependencies: HandlerDependenci
   const started = process.hrtime.bigint();
   let simulatedCrash = false;
   try {
-    await pause('before_tx');
-    const outcome = await processInTx(msg.event_id, () => hb.lostLock, withTxFn);
-    await crashAfterCommit();
+    await pauseFn('before_tx');
+    const outcome = await processInTx(msg.event_id, () => hb.lostLock, withTxFn, pauseFn);
+    await crashAfterCommit(msg.event_id);
     await ackAndDelete(msg, redisClient);
     if (outcome === 'applied') eventsProcessed.inc();
   } catch (error) {
