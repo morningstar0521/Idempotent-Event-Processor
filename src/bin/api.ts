@@ -1,6 +1,7 @@
 import { config } from '../shared/config.js';
 import { pool } from '../shared/db.js';
 import { redis } from '../shared/redis.js';
+import { logger } from '../shared/logger.js';
 import { startServer } from '../api/server.js';
 
 const server = startServer(config.PORT);
@@ -17,7 +18,9 @@ async function stop(): Promise<void> {
   const finished = closeServer().then(() => 'finished' as const);
   const result = await Promise.race([finished, grace]);
   await Promise.allSettled([pool.end(), redis.quit()]);
-  process.exit(result === 'finished' ? 0 : 1);
+  const exitCode = result === 'finished' ? 0 : 1;
+  logger.info({ service: 'api', exit_code: exitCode }, 'shutdown complete');
+  process.exit(exitCode);
 }
 
 process.once('SIGTERM', () => void stop());

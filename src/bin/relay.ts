@@ -1,6 +1,7 @@
 import express from 'express';
 import { config } from '../shared/config.js';
 import { metricsContent } from '../shared/metrics.js';
+import { logger } from '../shared/logger.js';
 import { closeRelayResources, Relay } from '../relay/relay.js';
 import { Sweeper } from '../relay/sweeper.js';
 
@@ -27,7 +28,9 @@ async function stop(): Promise<void> {
     new Promise<void>((resolve) => metricsServer.close(() => resolve())),
     closeRelayResources(),
   ]);
-  process.exit(result === 'finished' ? 0 : 1);
+  const exitCode = result === 'finished' ? 0 : 1;
+  logger.info({ service: 'relay', exit_code: exitCode }, 'shutdown complete');
+  process.exit(exitCode);
 }
 
 process.once('SIGTERM', () => void stop());
