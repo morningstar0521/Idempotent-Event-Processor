@@ -32,7 +32,7 @@ function number(value: unknown, name: string): number {
   return value;
 }
 
-function metricValue(snapshot: Record<string, string[]>, metric: string, labels = ''): number {
+function metricValue(snapshot: Record<string, string[]>, metric: string, labels = '', allowMissing = false): number {
   let total = 0;
   let found = false;
   let declared = false;
@@ -45,7 +45,7 @@ function metricValue(snapshot: Record<string, string[]>, metric: string, labels 
     total += Number(match[2]);
     found = true;
   }
-  if (!found && !declared) throw new Error(`Missing metric ${metric}${labels ? `{${labels}}` : ''}`);
+  if (!found && !declared && !allowMissing) throw new Error(`Missing metric ${metric}${labels ? `{${labels}}` : ''}`);
   return total;
 }
 
@@ -98,8 +98,8 @@ const cpu = os.cpus()[0]?.model;
 if (!cpu || !dockerVersion || workerCount < 1) throw new Error('Missing machine or worker measurement');
 
 const duplicateLayers = ['api', 'lock', 'db_status', 'ledger_constraint'].map((layer) => {
-  const beforeValue = metricValue(before, 'duplicates_blocked_total', `layer="${layer}"`);
-  const afterValue = metricValue(after, 'duplicates_blocked_total', `layer="${layer}"`);
+  const beforeValue = metricValue(before, 'duplicates_blocked_total', `layer="${layer}"`, true);
+  const afterValue = metricValue(after, 'duplicates_blocked_total', `layer="${layer}"`, true);
   return `| ${layer} | ${format(afterValue - beforeValue)} |`;
 }).join('\n');
 const runNote = await readOptional('/tmp/load-stability-note.md');
@@ -155,10 +155,10 @@ ${duplicateLayers}
 
 ## Retries and dead
 
-- events_retried_total: ${format(metricValue(after, 'events_retried_total') - metricValue(before, 'events_retried_total'))}
-- events_dead_total{reason="permanent"}: ${format(metricValue(after, 'events_dead_total', 'reason="permanent"') - metricValue(before, 'events_dead_total', 'reason="permanent"'))}
-- events_dead_total{reason="max_attempts"}: ${format(metricValue(after, 'events_dead_total', 'reason="max_attempts"') - metricValue(before, 'events_dead_total', 'reason="max_attempts"'))}
-- events_dead_total{reason="max_deliveries"}: ${format(metricValue(after, 'events_dead_total', 'reason="max_deliveries"') - metricValue(before, 'events_dead_total', 'reason="max_deliveries"'))}
+- events_retried_total: ${format(metricValue(after, 'events_retried_total', '', true) - metricValue(before, 'events_retried_total', '', true))}
+- events_dead_total{reason="permanent"}: ${format(metricValue(after, 'events_dead_total', 'reason="permanent"', true) - metricValue(before, 'events_dead_total', 'reason="permanent"', true))}
+- events_dead_total{reason="max_attempts"}: ${format(metricValue(after, 'events_dead_total', 'reason="max_attempts"', true) - metricValue(before, 'events_dead_total', 'reason="max_attempts"', true))}
+- events_dead_total{reason="max_deliveries"}: ${format(metricValue(after, 'events_dead_total', 'reason="max_deliveries"', true) - metricValue(before, 'events_dead_total', 'reason="max_deliveries"', true))}
 
 ## Invariants
 
