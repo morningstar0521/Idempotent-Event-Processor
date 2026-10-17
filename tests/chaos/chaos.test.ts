@@ -181,7 +181,8 @@ describe.sequential('Phase 6 chaos lite', () => {
     const expected = await seedWallets(merchants, 1_000_000, stack.api.url);
     const poisonEventId = await insertQueuedEvent('poison-event', makeEvent(7000));
     configure({ poisonEventId: poisonEventId });
-    await publishQueuedEvent(poisonEventId);
+    await testQuery('INSERT INTO outbox (event_id, published_at) VALUES ($1, now())', [poisonEventId]);
+    await testRedis.xadd('events:stream', '*', 'event_id', poisonEventId);
     await loadEvents(stack, 300, expected);
     await waitForDrain(60000);
     await assertInvariants({ balances: expected, keys: merchants.length + 301 });
