@@ -5,7 +5,7 @@ import { Counter } from 'k6/metrics';
 
 const scenario = __ENV.SCENARIO || 'dup_heavy';
 const baseUrl = __ENV.BASE_URL || 'http://127.0.0.1:3000';
-const plan = JSON.parse(open('./scripts/load/plan.json'));
+const plan = JSON.parse(open('./plan.json'));
 const status202 = new Counter('responses_202');
 const status200 = new Counter('responses_200');
 const status422 = new Counter('responses_422');

@@ -74,13 +74,14 @@ async function snapshot(): Promise<Record<string, string[]>> {
 }
 
 async function runK6(plan: LoadPlan): Promise<string> {
-  const resultPath = `${root}/scripts/load/results-${plan.run_id}.json`;
+  const resultRelativePath = `scripts/load/results-${plan.run_id}.json`;
+  const resultPath = `${root}/${resultRelativePath}`;
   const env = { SCENARIO: scenario, API_KEY: apiKey, BASE_URL: baseUrl, ARRIVAL_RATE: process.env.ARRIVAL_RATE || '25', DURATION: process.env.DURATION || '60s' };
-  const args = ['run', 'scripts/load/k6-ingest.js', `--env`, `SCENARIO=${env.SCENARIO}`, `--env`, `API_KEY=${env.API_KEY}`, `--env`, `BASE_URL=${env.BASE_URL}`, `--env`, `ARRIVAL_RATE=${env.ARRIVAL_RATE}`, `--env`, `DURATION=${env.DURATION}`, `--summary-export=${resultPath}`];
+  const args = ['run', 'scripts/load/k6-ingest.js', `--env`, `SCENARIO=${env.SCENARIO}`, `--env`, `API_KEY=${env.API_KEY}`, `--env`, `BASE_URL=${env.BASE_URL}`, `--env`, `ARRIVAL_RATE=${env.ARRIVAL_RATE}`, `--env`, `DURATION=${env.DURATION}`, `--summary-export=${resultRelativePath}`];
   try {
     await command('k6', args);
   } catch {
-    await command('docker', ['run', '--rm', '--add-host=host.docker.internal:host-gateway', '-v', `${root}:/work`, '-w', '/work', 'grafana/k6', 'run', 'scripts/load/k6-ingest.js', '--env', `SCENARIO=${scenario}`, '--env', `API_KEY=${apiKey}`, '--env', 'BASE_URL=http://host.docker.internal:3000', '--env', `ARRIVAL_RATE=${env.ARRIVAL_RATE}`, '--env', `DURATION=${env.DURATION}`, `--summary-export=${resultPath}`]);
+    await command('docker', ['run', '--rm', '--add-host=host.docker.internal:host-gateway', '-v', `${root}:/work`, '-w', '/work', 'grafana/k6', 'run', 'scripts/load/k6-ingest.js', '--env', `SCENARIO=${scenario}`, '--env', `API_KEY=${apiKey}`, '--env', 'BASE_URL=http://host.docker.internal:3000', '--env', `ARRIVAL_RATE=${env.ARRIVAL_RATE}`, '--env', `DURATION=${env.DURATION}`, `--summary-export=${resultRelativePath}`]);
   }
   return resultPath;
 }
