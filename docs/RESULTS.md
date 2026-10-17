@@ -74,6 +74,8 @@ CHAOS_PAUSE_MS=0
 
 **Note on same_key_storm:** p95 of 1066 ms is not a system latency figure. It is the expected cost of PostgreSQL serializing 1000 concurrent `INSERT ... ON CONFLICT (idempotency_key)` attempts on a single unique index entry. One request acquires the index entry, 999 wait. This scenario is deliberately pathological - it validates the duplicate-blocking path under extreme contention, not steady-state latency. In production, a client sending 1000 parallel requests for the same key is a client-side bug; the system still produces exactly 1 event and 1 effect (see C-9: processed=1, dup_blocked{api}=499).
 
+**Note on end-to-end latency:** E2E p95 of ~107 ms vs API p95 of ~4 ms is dominated by the relay poll interval (RELAY_POLL_MS=100). Events wait in the outbox up to 100 ms before the relay publishes them to the stream. This is a deliberate tradeoff: lower RELAY_POLL_MS reduces latency but increases CPU from empty polls. Tune in .env if latency is more important than poll cost.
+
 ## Duplicates blocked by layer
 
 | Layer | Count |
