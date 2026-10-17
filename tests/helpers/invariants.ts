@@ -60,19 +60,26 @@ export async function inv8(expected?: Expected): Promise<void> {
 
 export async function inv9(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, config.LOCK_TTL_MS));
-  let pending = 0;
-  try {
-    const result = await testRedis.xpending('events:stream', 'workers') as unknown as [string, number, string, string];
-    pending = Number(result[0] ?? 0);
-  } catch (error) {
-    if (!(error instanceof Error && error.message.includes('NOGROUP'))) throw error;
+  const deadline = Date.now() + 10000;
+  let state = { pending: 0, length: 0, delayed: 0, locks: 0 };
+  while (Date.now() < deadline) {
+    let pending = 0;
+    try {
+      const result = await testRedis.xpending('events:stream', 'workers') as unknown as [string, number, string, string];
+      pending = Number(result[0] ?? 0);
+    } catch (error) {
+      if (!(error instanceof Error && error.message.includes('NOGROUP'))) throw error;
+    }
+    const [length, delayed, locks] = await Promise.all([
+      testRedis.xlen('events:stream'),
+      testRedis.zcard('events:delayed'),
+      testRedis.scan(0, 'MATCH', 'lock:event:*', 'COUNT', 1000),
+    ]);
+    state = { pending, length, delayed, locks: locks[1].length };
+    if (pending === 0 && length === 0 && delayed === 0 && locks[1].length === 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  const [length, delayed, locks] = await Promise.all([
-    testRedis.xlen('events:stream'),
-    testRedis.zcard('events:delayed'),
-    testRedis.scan(0, 'MATCH', 'lock:event:*', 'COUNT', 1000),
-  ]);
-  if (pending !== 0 || length !== 0 || delayed !== 0 || locks[1].length !== 0) throw new Error(`INV-9 Redis not clean: ${JSON.stringify({ pending, length, delayed, locks: locks[1].length })}`);
+  throw new Error(`INV-9 Redis not clean: ${JSON.stringify(state)}`);
 }
 
 export async function inv10(): Promise<void> {
