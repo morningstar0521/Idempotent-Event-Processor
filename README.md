@@ -1,123 +1,114 @@
 # Idempotent Event Processor
 
-A small production-style TypeScript backend for accepting payment events with at-least-once delivery and idempotent processing. Each unique idempotency key produces at most one business effect.
+> At-least-once delivery with idempotent processing. Each unique idempotency key produces at most one business effect.
 
-The project uses PostgreSQL as the source of truth. Redis is used for delivery helpers, delayed retries, and worker coordination. The implementation includes the ingest API, transactional outbox, relay, workers, retries, recovery loops, and Phase 6 chaos invariants.
+A small production-style TypeScript backend for payment events. PostgreSQL is the source of truth. Redis provides delivery, delayed retry, and lock helpers. Correctness is enforced by database constraints and transactions, so a Redis loss is recoverable.
 
-## Current status
+## Quick start
 
-Implemented:
+```bash
+git clone https://github.com/morningstar0521/Idempotent-Event-Processor.git
+cd idempotent-event-processor
+cp .env.example .env
+docker compose up --build
+```
 
-- `POST /v1/events` for `payment.captured` and `payout.requested`
-- Idempotency keys from 1 to 255 characters
-- Stable SHA-256 payload hashing
-- Strict Zod payload validation
-- Atomic event and outbox writes in one PostgreSQL transaction
-- Duplicate request handling with 202, 200, and 422 responses
-- `GET /v1/events/:id` without returning the event payload
-- API-key authentication using `crypto.timingSafeEqual`
-- Structured request logging and Prometheus metrics
-- Isolated integration tests using `events_test` and Redis DB 15
-- Relay polling with `FOR UPDATE SKIP LOCKED`, publish-before-mark ordering, and retry on database failures
-- Relay stream-length metrics on port 9102 by default
-- Multi-stage Docker image and Compose services for the API and relay
+The API listens on `http://localhost:3000`. The Compose stack starts Postgres and Redis, runs the migration once, then starts the API, relay, and worker. Worker and relay metrics stay internal to the Compose network; API metrics are available at `/metrics`.
 
-Chaos lite runs use the same API, relay, and worker factories as production entrypoints. Chaos full runs exercise Docker worker, Redis, and PostgreSQL failure actions locally.
+### Duplicate demo
+
+```bash
+curl -s -X POST localhost:3000/v1/events -H 'X-API-Key: change-me' -H 'Idempotency-Key: demo-1' -H 'Content-Type: application/json' -d '{"type":"payment.captured","payload":{"merchant_id":"m_1","amount_minor":50000,"currency":"INR","payment_id":"p1"}}'
+curl -s -X POST localhost:3000/v1/events -H 'X-API-Key: change-me' -H 'Idempotency-Key: demo-1' -H 'Content-Type: application/json' -d '{"type":"payment.captured","payload":{"merchant_id":"m_1","amount_minor":50000,"currency":"INR","payment_id":"p1"}}'
+# The first response is 202; the second is 200 with duplicate: true and the same event_id.
+```
 
 ## Architecture
 
 ```mermaid
 flowchart LR
   P[Producer] -->|POST /v1/events + Idempotency-Key| API[API]
-  API -->|one transaction| PG[(PostgreSQL)]
-  API -->|event row + outbox row| PG
-  PG -->|Phase 2| R[Relay]
+  API -->|transaction: event + outbox| PG[(PostgreSQL)]
+  PG -->|poll unpublished rows| R[Relay]
   R -->|XADD events:stream| RS[(Redis Stream)]
-  RS -.->|Phase 3| W[Workers]
-  W -.->|Phase 3| PG
+  RS -->|consumer group| W[Workers]
+  W -->|row lock + status check + effect| PG
+  W -->|retry schedule| Z[(Redis ZSET)]
+  R -->|stale-event recovery| PG
 ```
 
-For a new request, the API validates the body, hashes `{type, payload}`, inserts the event using the unique idempotency key, inserts the outbox row, and commits both writes together. A repeated key reads the existing event and compares the stored payload hash.
+Processing is: validate and hash the request, write the event and outbox row in one transaction, publish the event, then process it under a Postgres row lock and status check. The database transaction commits before Redis acknowledgement. A sweeper rebuilds delivery from Postgres when Redis is wiped.
 
-## Stack
+## Duplicate protection
 
-- TypeScript, Node.js 20, Express 5
-- PostgreSQL 16 with `pg` and parameterized SQL
-- Redis 7 with `ioredis`
-- Zod validation, Pino JSON logging, Prometheus metrics
-- Vitest tests, pnpm, Docker Compose
+| Layer | Protection |
+|---|---|
+| API | Unique `idempotency_key` and payload-hash comparison reject reuse with a different body. |
+| Redis lock | A TTL lock reduces concurrent work and uses compare-and-delete release. It is an efficiency aid. |
+| Database status | A row lock and status check make already processed events no-ops. |
+| Ledger constraint | Unique `ledger_entries.event_id` is the final database guard. |
 
-## Quick start
+## Failure matrix
 
-Start the local dependencies:
+| Failure | Safe outcome |
+|---|---|
+| Same key in parallel | One event wins; other requests read the stored event. |
+| Same key with a different body | The API returns 422 and changes nothing. |
+| API or relay crash around commit/publish | Stored events remain available; duplicate stream messages are safely skipped. |
+| Worker crash before commit | The transaction rolls back and the reaper reclaims the message. |
+| Worker crash after commit before ack | Redelivery sees `processed` and skips the effect. |
+| Lock expiry during slow work | The database row lock decides the winner; the other worker skips. |
+| Transient failure or exhausted retries | Backoff is stored and later retried; exhausted events become `dead`. |
+| Permanent failure | The event becomes `dead` with no retry and appears in the DLQ. |
+| Poison message or worker termination | Delivery limits and graceful shutdown prevent unbounded stuck work. |
+| Redis loss | The Postgres sweeper re-enqueues stale `received` and `retrying` events. |
+| Postgres outage | The API returns 503 and workers do not acknowledge uncommitted work. |
+| Replay contention | One conditional update wins; later replay calls are rejected. |
+
+The full F1-F16 matrix is in [ARCHITECTURE.md](docs/ARCHITECTURE.md#8-failure-matrix-the-heart-of-the-project).
+
+## Measured run
+
+`docs/RESULTS.md` is generated from a real run on an Apple M1 Pro with three workers. The `dup_heavy` scenario sent 1,500 requests for 500 unique keys: 500 returned 202, 1,000 returned 200, and there were 0 errors. Measured ingest rate was 499.86 requests/sec and processed rate was 172.53 events/sec.
+
+API latency for `dup_heavy` was 1.60 ms p50, 3.78 ms p95, and 8.01 ms p99. End-to-end p95 was 106.83 ms. All 10 invariants passed, with 1,000 duplicates blocked at the API layer and 0 duplicate effects. The report also records six chaos-full scenarios, each with 500 processed events, 0 lost events, and 0 duplicate effects.
+
+These values describe one machine and are not a capacity claim. The pathological same-key scenario measured 1,066.52 ms API p95 because PostgreSQL serialized 1,000 concurrent attempts on one unique index entry.
+
+## Tests and chaos demo
 
 ```bash
-docker compose up -d postgres redis
 pnpm install --frozen-lockfile
-pnpm migrate
-pnpm dev:api
-# In another terminal:
-pnpm dev:relay
-```
-
-The API listens on `http://localhost:3000`. Configuration defaults are in `src/shared/config.ts`. Copy the documented values into `.env` when overrides are needed. Do not commit `.env` or secrets.
-
-## API example
-
-Create an event:
-
-```bash
-curl -i -X POST localhost:3000/v1/events \
-  -H 'X-API-Key: change-me' \
-  -H 'Idempotency-Key: payment-1' \
-  -H 'Content-Type: application/json' \
-  -d '{"type":"payment.captured","payload":{"merchant_id":"m_1","amount_minor":50000,"currency":"INR","payment_id":"p1"}}'
-```
-
-Responses:
-
-- `202`: new event, `duplicate: false`
-- `200`: same key and same body, `duplicate: true`
-- `422`: same key with a different body, `IDEMPOTENCY_KEY_REUSED`
-- `400`: invalid body or idempotency key
-- `401`: missing or invalid API key
-- `503`: PostgreSQL unavailable
-
-Public operational endpoints are:
-
-- `GET /health`
-- `GET /ready`
-- `GET /metrics`
-
-## Tests and checks
-
-```bash
-pnpm typecheck
 pnpm lint
+pnpm typecheck
 pnpm test:unit
 pnpm test:integration
 pnpm test:chaos
-CHAOS_SEED=1 pnpm test:chaos
 pnpm test:chaos:full
 ```
 
-Integration tests create and migrate `events_test`, use a separate PostgreSQL pool, and flush Redis DB 15 between tests. The production `events` database is not used by the integration suite.
+The CI-safe chaos suite runs in-process. The full suite uses the Compose stack and local Docker failure actions. Both finish by checking the database, ledger, outbox, retry, Redis, and money invariants.
 
-The Phase 1 API suite verifies validation, authentication, duplicate requests, concurrent same-key requests, transactional outbox rollback, unavailable PostgreSQL handling, and event lookup. The Phase 2 relay suite verifies single-relay publishing, parallel relays with `SKIP LOCKED`, crash-after-publish recovery behavior, and stream message shape.
+## Acceptance coverage
 
-Chaos runs print a reproducible seed and finish with INV-1 through INV-10. A flaky chaos result is treated as a bug and must be investigated with its seed.
+- Concurrent same-key requests produce one event and one ledger effect.
+- Duplicate-heavy load preserves all invariants.
+- Worker kills, crashes after commit, lock expiry, and Redis loss are covered by chaos and recovery tests.
+- Permanent failures dead-letter after one attempt; replay after fixing the cause is supported.
+- Real load and chaos results are recorded in [docs/RESULTS.md](docs/RESULTS.md).
+- API, readiness, wallet verification, DLQ, replay, and metrics endpoints are documented in [docs/API.md](docs/API.md).
 
-### Chaos demo
+## Honest limits
 
-```bash
-pnpm test:chaos
-CHAOS_SEED=123 pnpm test:chaos
-pnpm test:chaos:full
-```
+- Delivery is at-least-once; duplicates are expected and handled.
+- There is no global ordering across events.
+- This setup uses one Postgres and one Redis instance, with no failover.
+- Redis Streams are not a replicated log; Postgres plus the sweeper is the recovery path.
+- Idempotency keys are never deleted in v1.
+- The demonstrated effect is a database write. An external bank or payment API must support its own idempotency key because it cannot join this database transaction.
+- Results come from one machine and are not a capacity claim.
 
-The lite run is CI-safe and in-process. The full run starts the Compose stack, sends real duplicate load, injects Docker failures, waits for final states, and writes `scripts/chaos/results.json`.
-
-## Project documentation
+## Documentation
 
 - [Product requirements](docs/PRD.md)
 - [Architecture and failure matrix](docs/ARCHITECTURE.md)
@@ -126,11 +117,3 @@ The lite run is CI-safe and in-process. The full run starts the Compose stack, s
 - [Testing plan](docs/TESTING.md)
 - [Build plan](docs/BUILD-PLAN.md)
 - [Design decisions](docs/DECISIONS.md)
-
-## Known limits
-
-- Only INR is supported in v1.
-- Events are stored indefinitely in v1.
-- There is no cross-event ordering guarantee.
-- PostgreSQL and Redis are single local services at this stage.
-- The business effect is represented by database writes; an external payment provider would need its own idempotency mechanism.
