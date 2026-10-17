@@ -82,11 +82,13 @@ const e2e = await pool.query<{ p50: number; p95: number; p99: number }>(`SELECT
   FROM events WHERE idempotency_key = ANY($1::text[]) AND processed_at IS NOT NULL`, [plan.requests.map((request) => request.key).concat(plan.scenario === 'same_key_storm' ? ['same-key-storm'] : [])]);
 if (db.rows[0].unfinished !== '0') throw new Error(`Unfinished events: ${db.rows[0].unfinished}`);
 if (db.rows[0].ledger !== db.rows[0].processed) throw new Error(`Ledger mismatch: ${db.rows[0].ledger} vs ${db.rows[0].processed}`);
-if (!e2e.rows[0].p95) throw new Error('Missing end-to-end latency query result');
+const e2eValues = Object.fromEntries(Object.entries(e2e.rows[0]).map(([key, value]) => [key, Number(value)])) as { p50: number; p95: number; p99: number };
+if (!Number.isFinite(e2eValues.p95)) throw new Error('Missing end-to-end latency query result');
 const rate = Number(summary.metrics?.http_reqs?.values?.rate ?? summary.metrics?.http_reqs?.rate);
 if (!Number.isFinite(rate)) throw new Error('Missing measured ingest rate');
-const processedRate = await pool.query<{ rate: number }>(`SELECT count(*) / NULLIF(extract(epoch FROM max(processed_at) - min(created_at)), 0) AS rate FROM events WHERE idempotency_key = ANY($1::text[]) AND status = 'processed'`, [plan.requests.map((request) => request.key).concat(plan.scenario === 'same_key_storm' ? ['same-key-storm'] : [])]);
-if (!Number.isFinite(processedRate.rows[0].rate)) throw new Error('Missing measured processed rate');
+const processedRate = await pool.query<{ rate: string }>(`SELECT count(*) / NULLIF(extract(epoch FROM max(processed_at) - min(created_at)), 0) AS rate FROM events WHERE idempotency_key = ANY($1::text[]) AND status = 'processed'`, [plan.requests.map((request) => request.key).concat(plan.scenario === 'same_key_storm' ? ['same-key-storm'] : [])]);
+const processedRateValue = Number(processedRate.rows[0].rate);
+if (!Number.isFinite(processedRateValue)) throw new Error('Missing measured processed rate');
 const gitSha = (await exec('git', ['rev-parse', 'HEAD'])).stdout.trim();
 const dockerVersion = (await exec('docker', ['version', '--format', '{{.Server.Version}}'])).stdout.trim();
 const workerCount = (await exec('docker', ['compose', 'ps', '-q', 'worker'])).stdout.trim().split('\n').filter(Boolean).length;
@@ -136,14 +138,14 @@ ${config.trim()}
 | Metric | Measured |
 |---|---:|
 | Ingest rate (requests/sec) | ${format(rate)} |
-| Processed rate (events/sec) | ${format(processedRate.rows[0].rate)} |
+| Processed rate (events/sec) | ${format(processedRateValue)} |
 
 ## Latency (${plan.scenario})
 
 | Source | p50 (ms) | p95 (ms) | p99 (ms) |
 |---|---:|---:|---:|
 | API request duration | ${format(percentile('http_req_duration', 'med'))} | ${format(percentile('http_req_duration', 'p(95)'))} | ${format(percentile('http_req_duration', 'p(99)'))} |
-| End-to-end | ${format(e2e.rows[0].p50)} | ${format(e2e.rows[0].p95)} | ${format(e2e.rows[0].p99)} |
+| End-to-end | ${format(e2eValues.p50)} | ${format(e2eValues.p95)} | ${format(e2eValues.p99)} |
 
 ## Duplicates blocked by layer
 
