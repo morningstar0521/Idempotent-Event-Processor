@@ -231,7 +231,7 @@ Tool: k6. Scripts: `scripts/load/run.ts` (orchestrates), `scripts/load/k6-ingest
 | Scenario | Purpose | Shape |
 |---|---|---|
 | `smoke` | Sanity | 1 VU, 10 requests |
-| `dup_heavy` (the main one) | Throughput and latency with 50 percent duplicates | `constant-arrival-rate` or `ramping-arrival-rate` over the shuffled request list. Rates are set in the script header and recorded in RESULTS.md |
+| `dup_heavy` (the main one) | Throughput and latency with 200 percent duplicates: each unique event is sent 3 times | `constant-arrival-rate` over the shuffled request list. Rates are set in the script header and recorded in RESULTS.md |
 | `same_key_storm` | 1,000 parallel requests with one key (AC-1) | `shared-iterations`, 1,000 VUs, 1,000 iterations |
 
 Each request sets a fresh `Idempotency-Key` per unique event. Duplicate requests reuse the key and the identical body. k6 checks: status is 200 or 202, and `event_id` is present. A 5xx or a check failure is a failure of the run.
@@ -296,7 +296,7 @@ Invariant coverage in the chaos suite. Each listed C test calls `assertInvariant
 | AC (PRD section 9) | Proof |
 |---|---|
 | 1. 1,000 parallel same-key requests give 1 event and 1 ledger entry | I-API-4, `same_key_storm` |
-| 2. 50 percent duplicate load ends with invariants passing | `dup_heavy` plus INV-1 to INV-10 |
+| 2. 200 percent duplicate load ends with invariants passing | `dup_heavy` plus INV-1 to INV-10 |
 | 3. SIGKILL workers loses nothing and doubles nothing | C-1, CF-1 |
 | 4. Crash after commit, before ack, is skipped on redelivery | C-2, I-WRK-4 |
 | 5. Redis wipe loses nothing | C-4, CF-2 |

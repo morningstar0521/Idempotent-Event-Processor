@@ -4,6 +4,7 @@ import { writeFile } from 'node:fs/promises';
 import { Pool } from 'pg';
 import { createPlan, writePlan, type LoadPlan } from './plan.js';
 import { createRedis } from '../../src/shared/redis.js';
+import { readFile } from 'node:fs/promises';
 
 const exec = promisify(execFile);
 const root = process.cwd();
@@ -58,6 +59,16 @@ async function waitForDrain(timeoutMs: number): Promise<void> {
   throw new Error('Timed out waiting for load drain');
 }
 
+async function e2eLatency(plan: LoadPlan): Promise<{ p50: number; p95: number; p99: number }> {
+  const keys = plan.scenario === 'same_key_storm' ? ['same-key-storm'] : plan.requests.map((request) => request.key).filter((key, index, all) => all.indexOf(key) === index);
+  const result = await pool.query<{ p50: string; p95: string; p99: string }>(`SELECT
+    percentile_cont(0.50) WITHIN GROUP (ORDER BY extract(epoch FROM processed_at - created_at) * 1000)::text AS p50,
+    percentile_cont(0.95) WITHIN GROUP (ORDER BY extract(epoch FROM processed_at - created_at) * 1000)::text AS p95,
+    percentile_cont(0.99) WITHIN GROUP (ORDER BY extract(epoch FROM processed_at - created_at) * 1000)::text AS p99
+    FROM events WHERE idempotency_key = ANY($1::text[]) AND processed_at IS NOT NULL`, [keys]);
+  return { p50: Number(result.rows[0].p50), p95: Number(result.rows[0].p95), p99: Number(result.rows[0].p99) };
+}
+
 async function scrape(url: string): Promise<string> {
   return (await command('docker', ['compose', 'exec', '-T', url.split(':')[0], 'node', '-e', `fetch('http://127.0.0.1:${url.split(':')[1]}/metrics').then(r=>r.text()).then(console.log)`])).trim();
 }
@@ -76,7 +87,9 @@ async function snapshot(): Promise<Record<string, string[]>> {
 async function runK6(plan: LoadPlan): Promise<string> {
   const resultRelativePath = `scripts/load/results-${plan.run_id}.json`;
   const resultPath = `${root}/${resultRelativePath}`;
-  const env = { SCENARIO: scenario, API_KEY: apiKey, BASE_URL: baseUrl, ARRIVAL_RATE: process.env.ARRIVAL_RATE || '25', DURATION: process.env.DURATION || '60s' };
+  const arrivalRate = Number(process.env.ARRIVAL_RATE || '25');
+  const duration = process.env.DURATION || `${(plan.requests.length / arrivalRate).toFixed(3)}s`;
+  const env = { SCENARIO: scenario, API_KEY: apiKey, BASE_URL: baseUrl, ARRIVAL_RATE: String(arrivalRate), DURATION: duration };
   const args = ['run', 'scripts/load/k6-ingest.js', `--env`, `SCENARIO=${env.SCENARIO}`, `--env`, `API_KEY=${env.API_KEY}`, `--env`, `BASE_URL=${env.BASE_URL}`, `--env`, `ARRIVAL_RATE=${env.ARRIVAL_RATE}`, `--env`, `DURATION=${env.DURATION}`, `--summary-export=${resultRelativePath}`];
   try {
     await command('k6', args);
@@ -90,20 +103,27 @@ async function main(): Promise<void> {
   await getJson('/ready');
   await resetState();
   const runId = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
-  const plan = createPlan(runId, Number(process.env.UNIQUE_EVENTS || 500), Number(process.env.DUP_RATIO || 0.5), scenario);
+  const uniqueEvents = scenario === 'smoke' ? 10 : Number(process.env.UNIQUE_EVENTS || 500);
+  const plan = createPlan(runId, uniqueEvents, 2, scenario);
   await writePlan(planPath, plan);
   await seedWallets();
   const before = await snapshot();
   const summaryPath = await runK6(plan);
   await waitForDrain(Number(process.env.DRAIN_TIMEOUT_MS || 120000));
   const after = await snapshot();
+  const e2e = await e2eLatency(plan);
   const snapshotPath = `${root}/scripts/load/metrics-${runId}.json`;
   const invariantPath = `${root}/scripts/load/invariants-${runId}.json`;
-  await writeFile(snapshotPath, JSON.stringify({ before, after }, null, 2));
-  const expectedKeys = scenario === 'same_key_storm' ? 21 : scenario === 'smoke' ? 30 : plan.unique_events + 20;
+  await writeFile(snapshotPath, JSON.stringify({ before, after, e2e }, null, 2));
+  const expectedKeys = scenario === 'same_key_storm' ? 21 : plan.unique_events + 20;
   await command('pnpm', ['tsx', 'scripts/load/assert-invariants.ts', JSON.stringify(plan.expected_balances), String(expectedKeys), invariantPath], {
     env: { TEST_DATABASE_URL: databaseUrl, TEST_REDIS_URL: redisUrl },
   });
+  const artifactsPath = `${root}/scripts/load/scenario-artifacts.json`;
+  let artifacts: Record<string, { summary: string; snapshot: string }> = {};
+  try { artifacts = JSON.parse(await readFile(artifactsPath, 'utf8')) as typeof artifacts; } catch { /* first scenario run */ }
+  artifacts[scenario] = { summary: summaryPath, snapshot: snapshotPath };
+  await writeFile(artifactsPath, JSON.stringify(artifacts, null, 2));
   await command('pnpm', ['tsx', 'scripts/report.ts', summaryPath, snapshotPath, planPath, invariantPath], { env: { LOAD_SCENARIO: scenario, ARRIVAL_RATE: process.env.ARRIVAL_RATE || '25' } });
   console.log(`LOAD_RUN_ID=${runId}`);
   console.log(`LOAD_SUMMARY=${summaryPath}`);

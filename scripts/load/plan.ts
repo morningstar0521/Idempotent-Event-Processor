@@ -24,12 +24,11 @@ export function createPlan(runId: string, uniqueEvents: number, duplicateRatio: 
   const expectedBalances = Object.fromEntries(Array.from({ length: 20 }, (_, index) => [`m_${index}`, 1_000_000]));
   const stormBody = makeEvent(0);
   if (scenario === 'same_key_storm') expectedBalances[stormBody.payload.merchant_id] += stormBody.payload.amount_minor;
-  const duplicates = Math.floor(uniqueEvents * duplicateRatio);
   for (let index = 0; index < (scenario === 'same_key_storm' ? 0 : uniqueEvents); index += 1) {
     const body = makeEvent(index);
-    requests.push({ key: `load-${runId}-${index}`, body, isDuplicate: false });
+    const key = `load-${runId}-${index}`;
     expectedBalances[body.payload.merchant_id] += body.payload.amount_minor;
-    if (index < duplicates) requests.push({ key: `load-${runId}-${index}`, body, isDuplicate: true });
+    for (let send = 0; send < 3; send += 1) requests.push({ key, body, isDuplicate: send > 0 });
   }
   const plan: LoadPlan = {
     run_id: runId,

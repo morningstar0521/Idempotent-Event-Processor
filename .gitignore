@@ -5,6 +5,7 @@ scripts/load/plan.json
 scripts/load/results-*.json
 scripts/load/metrics-*.json
 scripts/load/invariants-*.json
+scripts/load/scenario-artifacts.json
 coverage
 .DS_Store
 

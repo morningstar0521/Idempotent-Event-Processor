@@ -9,11 +9,12 @@ const exec = promisify(execFile);
 const [summaryPath, snapshotPath, planPath, invariantPath] = process.argv.slice(2);
 if (!summaryPath || !snapshotPath || !planPath || !invariantPath) throw new Error('Usage: tsx scripts/report.ts <summary> <metrics> <plan> <invariants>');
 type K6Summary = { metrics: Record<string, Record<string, number> & { values?: Record<string, number> }> };
-type Snapshots = { before: Record<string, string[]>; after: Record<string, string[]> };
+type Snapshots = { before: Record<string, string[]>; after: Record<string, string[]>; e2e?: { p50: number; p95: number; p99: number } };
 type Invariants = { status: string; invariants: Array<{ id: string; status: string }> };
 const [summary, snapshots, plan, invariants] = await Promise.all([
   readJson<K6Summary>(summaryPath), readJson<Snapshots>(snapshotPath), readJson<LoadPlan>(planPath), readJson<Invariants>(invariantPath),
 ]);
+const artifacts = await readOptionalJson<Record<string, { summary: string; snapshot: string }>>('scripts/load/scenario-artifacts.json');
 if (invariants.status !== 'PASS') throw new Error('Refusing to write RESULTS.md because invariants did not pass');
 const pool = new Pool({ connectionString: process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/events' });
 process.once('uncaughtException', async (error) => {
@@ -55,11 +56,6 @@ function counter(name: string, allowMissing = false): number {
   return number(metric?.values?.count ?? metric?.count, name);
 }
 
-function percentile(name: string, key: string): number {
-  const metric = summary.metrics?.[name];
-  return number(metric?.values?.[key] ?? metric?.[key], `${name}.${key}`);
-}
-
 function format(value: number): string { return Number.isInteger(value) ? String(value) : value.toFixed(2); }
 
 const before = snapshots.before as Record<string, string[]>;
@@ -82,7 +78,7 @@ const e2e = await pool.query<{ p50: number; p95: number; p99: number }>(`SELECT
   FROM events WHERE idempotency_key = ANY($1::text[]) AND processed_at IS NOT NULL`, [plan.requests.map((request) => request.key).concat(plan.scenario === 'same_key_storm' ? ['same-key-storm'] : [])]);
 if (db.rows[0].unfinished !== '0') throw new Error(`Unfinished events: ${db.rows[0].unfinished}`);
 if (db.rows[0].ledger !== db.rows[0].processed) throw new Error(`Ledger mismatch: ${db.rows[0].ledger} vs ${db.rows[0].processed}`);
-const e2eValues = Object.fromEntries(Object.entries(e2e.rows[0]).map(([key, value]) => [key, Number(value)])) as { p50: number; p95: number; p99: number };
+const e2eValues = snapshots.e2e ?? Object.fromEntries(Object.entries(e2e.rows[0]).map(([key, value]) => [key, Number(value)])) as { p50: number; p95: number; p99: number };
 if (!Number.isFinite(e2eValues.p95)) throw new Error('Missing end-to-end latency query result');
 const rate = Number(summary.metrics?.http_reqs?.values?.rate ?? summary.metrics?.http_reqs?.rate);
 if (!Number.isFinite(rate)) throw new Error('Missing measured ingest rate');
@@ -102,6 +98,14 @@ const duplicateLayers = ['api', 'lock', 'db_status', 'ledger_constraint'].map((l
   const afterValue = metricValue(after, 'duplicates_blocked_total', `layer="${layer}"`, true);
   return `| ${layer} | ${format(afterValue - beforeValue)} |`;
 }).join('\n');
+const scenarioRows = [];
+for (const name of ['smoke', 'dup_heavy', 'same_key_storm']) {
+  const artifact = artifacts[name];
+  if (!artifact) throw new Error(`Missing latency artifact for scenario ${name}`);
+  const scenarioSummary = await readJson<K6Summary>(artifact.summary);
+  const scenarioSnapshot = await readJson<Snapshots>(artifact.snapshot);
+  scenarioRows.push(`| ${name} | ${format(percentileFrom(scenarioSummary, 'http_req_duration', 'med'))} | ${format(percentileFrom(scenarioSummary, 'http_req_duration', 'p(95)'))} | ${format(percentileFrom(scenarioSummary, 'http_req_duration', 'p(99)'))} | ${format(scenarioSnapshot.e2e?.p95 ?? NaN)} |`);
+}
 const runNote = await readOptional('/tmp/load-stability-note.md');
 const output = `# Load test results
 
@@ -140,12 +144,11 @@ ${config.trim()}
 | Ingest rate (requests/sec) | ${format(rate)} |
 | Processed rate (events/sec) | ${format(processedRateValue)} |
 
-## Latency (${plan.scenario})
+## Latency by scenario
 
-| Source | p50 (ms) | p95 (ms) | p99 (ms) |
-|---|---:|---:|---:|
-| API request duration | ${format(percentile('http_req_duration', 'med'))} | ${format(percentile('http_req_duration', 'p(95)'))} | ${format(percentile('http_req_duration', 'p(99)'))} |
-| End-to-end | ${format(e2eValues.p50)} | ${format(e2eValues.p95)} | ${format(e2eValues.p99)} |
+| Scenario | API p50 (ms) | API p95 (ms) | API p99 (ms) | E2E p95 (ms) |
+|---|---:|---:|---:|---:|
+${scenarioRows.join('\n')}
 
 ## Duplicates blocked by layer
 
@@ -183,4 +186,13 @@ await pool.end();
 
 async function readOptional(path: string): Promise<string> {
   try { return await readFile(path, 'utf8'); } catch { return ''; }
+}
+
+async function readOptionalJson<T>(path: string): Promise<T> {
+  try { return JSON.parse(await readFile(path, 'utf8')) as T; } catch { return {} as T; }
+}
+
+function percentileFrom(source: K6Summary, name: string, key: string): number {
+  const metric = source.metrics?.[name];
+  return number(metric?.values?.[key] ?? metric?.[key], `${name}.${key}`);
 }
