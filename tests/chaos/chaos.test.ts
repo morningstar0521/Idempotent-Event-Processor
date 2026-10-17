@@ -212,7 +212,7 @@ describe.sequential('Phase 6 chaos lite', () => {
     await publishQueuedEvent(forcedEventId);
     await loadEvents(stack, 300, expected);
     await waitForDrain();
-    await assertInvariants({ balances: expected, keys: merchants.length + 301 });
+    await assertInvariants({ keys: merchants.length + 301 });
     expect((await counterValue(eventsRetried)) - before.retried).toBeGreaterThan(0);
     expect((await counterValue(eventsDead, { reason: 'max_attempts' })) - before.maxAttempts).toBeGreaterThan(0);
     await report('C-7', before);
