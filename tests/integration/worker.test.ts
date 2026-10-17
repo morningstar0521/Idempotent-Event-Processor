@@ -89,6 +89,33 @@ describe('worker', () => {
     expect((await testQuery<{ balance_minor: string }>('SELECT balance_minor FROM wallets WHERE merchant_id = $1', ['m_1'])).rows[0].balance_minor).toBe('0');
   });
 
+  it('I-WRK-6 dead-letters insufficient funds without scheduling a retry', async () => {
+    const payload = payment('no-funds', 100);
+    const eventId = await insertEvent('payout.requested', {
+      merchant_id: payload.merchant_id,
+      amount_minor: payload.amount_minor,
+      currency: payload.currency,
+      payout_id: payload.payment_id,
+    });
+    const msg = await message(eventId);
+    await handle(msg, deps);
+    const event = await testQuery<{ status: string; attempts: number; last_error: string; last_error_kind: string }>(
+      'SELECT status, attempts, last_error, last_error_kind FROM events WHERE id = $1', [eventId],
+    );
+    expect(event.rows[0]).toEqual({ status: 'dead', attempts: 1, last_error: 'INSUFFICIENT_FUNDS', last_error_kind: 'permanent' });
+    expect(await testRedis.zcard('events:delayed')).toBe(0);
+    expect(await testRedis.xrange('events:stream', '-', '+')).toHaveLength(0);
+  });
+
+  it('I-WRK-8 dead-letters an invalid worker payload as permanent', async () => {
+    const eventId = await insertEvent('payment.captured', { invalid: true });
+    await handle(await message(eventId), deps);
+    const event = await testQuery<{ status: string; attempts: number; last_error_kind: string }>(
+      'SELECT status, attempts, last_error_kind FROM events WHERE id = $1', [eventId],
+    );
+    expect(event.rows[0]).toEqual({ status: 'dead', attempts: 1, last_error_kind: 'permanent' });
+  });
+
   it('I-WRK-10 releases only the lock owner and always sets a TTL', async () => {
     const key = `test-lock:${randomUUID()}`;
     const first = await tryAcquire(key, 1000, testRedis);
