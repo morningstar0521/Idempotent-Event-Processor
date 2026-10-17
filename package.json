@@ -17,8 +17,8 @@
     "typecheck": "tsc --noEmit",
     "test:unit": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
-    "test:chaos": "vitest run --project chaos",
-    "test:chaos:full": "node -e \"console.error('not implemented yet'); process.exit(1)\"",
+    "test:chaos": "NODE_ENV=test LOCK_TTL_MS=1500 VISIBILITY_TIMEOUT_MS=1500 RELAY_POLL_MS=20 BACKOFF_BASE_MS=20 BACKOFF_CAP_MS=200 SWEEP_INTERVAL_MS=500 SWEEP_STALE_MS=1000 MAX_ATTEMPTS=5 MAX_DELIVERIES=5 vitest run --project chaos",
+    "test:chaos:full": "NODE_ENV=development tsx scripts/chaos/full.ts",
     "load": "node -e \"console.error('not implemented yet'); process.exit(1)\"",
     "format": "prettier --write ."
   },
