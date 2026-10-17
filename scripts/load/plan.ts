@@ -25,7 +25,7 @@ export function createPlan(runId: string, uniqueEvents: number, duplicateRatio: 
   const stormBody = makeEvent(0);
   if (scenario === 'same_key_storm') expectedBalances[stormBody.payload.merchant_id] += stormBody.payload.amount_minor;
   const duplicates = Math.floor(uniqueEvents * duplicateRatio);
-  for (let index = 0; index < uniqueEvents; index += 1) {
+  for (let index = 0; index < (scenario === 'same_key_storm' ? 0 : uniqueEvents); index += 1) {
     const body = makeEvent(index);
     requests.push({ key: `load-${runId}-${index}`, body, isDuplicate: false });
     expectedBalances[body.payload.merchant_id] += body.payload.amount_minor;
