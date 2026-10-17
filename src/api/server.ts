@@ -8,8 +8,9 @@ import { requireApiKey } from './middleware/auth.js';
 import { errorHandler } from './middleware/errors.js';
 import { requestLogging } from './middleware/request-logging.js';
 import { registerEventRoutes, type EventRouteOptions } from './routes/events.js';
+import { registerAdminRoutes, type AdminRouteOptions } from './routes/admin.js';
 
-export function createApp(options: EventRouteOptions & { redisClient?: Redis } = {}) {
+export function createApp(options: EventRouteOptions & AdminRouteOptions & { redisClient?: Redis } = {}) {
   const app = express();
   const queryFn = options.queryFn ?? query;
   const redisClient = options.redisClient ?? redis;
@@ -29,6 +30,7 @@ export function createApp(options: EventRouteOptions & { redisClient?: Redis } =
   const v1 = express.Router();
   v1.use(requireApiKey);
   registerEventRoutes(v1, options);
+  registerAdminRoutes(v1, options);
   app.use('/v1', v1);
   app.use(errorHandler);
   return app;

@@ -9,6 +9,7 @@ import { logger } from '../shared/logger.js';
 import { duplicatesBlocked, eventsProcessed, processingDuration } from '../shared/metrics.js';
 import { redis } from '../shared/redis.js';
 import { release, startHeartbeat, tryAcquire } from './lock.js';
+import { handleFailure, type FailureDependencies } from './retry.js';
 
 const STREAM = 'events:stream';
 const GROUP = 'workers';
@@ -25,10 +26,7 @@ export interface HandlerDependencies {
   tryAcquireFn?: typeof tryAcquire;
   startHeartbeatFn?: typeof startHeartbeat;
   releaseFn?: typeof release;
-}
-
-function errorKind(error: unknown): 'transient' | 'permanent' {
-  return error instanceof PermanentError ? 'permanent' : error instanceof TransientError ? 'transient' : 'transient';
+  handleFailureFn?: typeof handleFailure;
 }
 
 async function ackAndDelete(message: StreamMessage, redisClient: Redis): Promise<void> {
@@ -70,6 +68,7 @@ export async function handle(msg: StreamMessage, dependencies: HandlerDependenci
   const acquire = dependencies.tryAcquireFn ?? ((key, ttl) => tryAcquire(key, ttl, redisClient));
   const heartbeat = dependencies.startHeartbeatFn ?? ((key, token, ttl) => startHeartbeat(key, token, ttl, redisClient));
   const releaseLock = dependencies.releaseFn ?? ((key, token) => release(key, token, redisClient));
+  const fail = dependencies.handleFailureFn ?? handleFailure;
   const withTxFn = dependencies.withTxFn ?? withTx;
   const lock = await acquire(`lock:event:${msg.event_id}`, config.LOCK_TTL_MS);
   if (!lock) {
@@ -92,7 +91,11 @@ export async function handle(msg: StreamMessage, dependencies: HandlerDependenci
       simulatedCrash = true;
       throw error;
     }
-    logger.error({ err: error, event_id: msg.event_id, error_kind: errorKind(error) }, 'event processing failed');
+    try {
+      await fail(msg.event_id, error, msg, { redisClient, withTxFn } satisfies FailureDependencies);
+    } catch (failureError) {
+      logger.error({ err: failureError, event_id: msg.event_id }, 'event failure handling failed');
+    }
   } finally {
     hb.stop();
     if (!simulatedCrash) await releaseLock(lock.key, lock.token);

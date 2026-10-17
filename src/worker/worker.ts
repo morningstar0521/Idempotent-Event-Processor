@@ -3,6 +3,7 @@ import type { Redis } from 'ioredis';
 import { config } from '../shared/config.js';
 import { streamPending } from '../shared/metrics.js';
 import { redis } from '../shared/redis.js';
+import { moveDue, startDelayedMover } from './delayed.js';
 import { handle, type StreamMessage } from './handler.js';
 
 const STREAM = 'events:stream';
@@ -23,6 +24,7 @@ export class Worker {
   private readonly concurrency: number;
   private readonly consumerName: string;
   private readonly handleFn: typeof handle;
+  private mover?: NodeJS.Timeout;
 
   constructor(options: WorkerOptions = {}) {
     this.redisClient = options.redisClient ?? redis;
@@ -38,11 +40,13 @@ export class Worker {
       if (!(error instanceof Error && error.message.includes('BUSYGROUP'))) throw error;
     }
     this.loopPromise = this.run();
+    this.mover = startDelayedMover(this.redisClient);
     await this.loopPromise;
   }
 
   async stop(): Promise<void> {
     this.stopped = true;
+    if (this.mover) globalThis.clearInterval(this.mover);
     await this.loopPromise;
     await Promise.all([...this.active]);
   }
@@ -53,6 +57,7 @@ export class Worker {
         'GROUP', GROUP, this.consumerName, 'COUNT', String(this.concurrency), 'BLOCK', '1000', 'STREAMS', STREAM, '>',
       ) as Array<[string, Array<[string, string[]]>]> | null;
       await this.updatePending();
+      await moveDue(this.redisClient);
       if (!result) continue;
       const messages = result[0]?.[1] ?? [];
       await Promise.all(messages.map(([id, fields]) => this.dispatch({ id, event_id: fields[fields.indexOf('event_id') + 1] })));
