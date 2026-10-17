@@ -45,7 +45,11 @@ export async function startStack(options: StackOptions = {}): Promise<Stack> {
         withTxFn: testWithTx,
         pauseFn: options.pauseWorkerId === -1 || options.pauseWorkerId === index ? pause : async () => undefined,
         startHeartbeatFn: options.disableHeartbeatWorkerId === -1 || options.disableHeartbeatWorkerId === index
-          ? (() => ({ stop: () => undefined, lostLock: false }) as Heartbeat)
+          ? ((_key, _token, ttl) => {
+            let lostLock = false;
+            const timer = globalThis.setTimeout(() => { lostLock = true; }, ttl);
+            return { stop: () => globalThis.clearTimeout(timer), get lostLock() { return lostLock; } } as Heartbeat;
+          })
           : startHeartbeat,
       }),
       queryFn: testQuery,
