@@ -79,7 +79,9 @@ export async function inv9(): Promise<void> {
     if (pending === 0 && length === 0 && delayed === 0 && locks[1].length === 0) return;
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error(`INV-9 Redis not clean: ${JSON.stringify(state)}`);
+  let details: unknown = [];
+  try { details = await testRedis.xpending('events:stream', 'workers', '-', '+', 10); } catch { /* include the summary when details are unavailable */ }
+  throw new Error(`INV-9 Redis not clean: ${JSON.stringify({ ...state, details })}`);
 }
 
 export async function inv10(): Promise<void> {

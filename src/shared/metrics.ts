@@ -14,6 +14,10 @@ export const apiRequestDuration = new Histogram({ name: 'api_request_duration_se
 export const streamLength = new Gauge({ name: 'stream_length', help: 'Stream length', registers: [metricsRegistry] });
 export const streamPending = new Gauge({ name: 'stream_pending', help: 'Pending stream messages', registers: [metricsRegistry] });
 export const delayedSize = new Gauge({ name: 'delayed_size', help: 'Delayed event count', registers: [metricsRegistry] });
+export const chaosFires = new Counter({ name: 'chaos_fires_total', help: 'Chaos hooks fired', labelNames: ['cause'], registers: [metricsRegistry] });
+export const lockRecovered = new Counter({ name: 'lock_recovered_total', help: 'Expired-lock workers that recovered from committed status', registers: [metricsRegistry] });
+export const lockTimeoutWaits = new Counter({ name: 'lock_timeout_wait_total', help: 'Transactions that waited on an event row lock', registers: [metricsRegistry] });
+export const duplicateStreamMessages = new Counter({ name: 'duplicate_stream_messages_total', help: 'Stream messages skipped after an event was already processed', registers: [metricsRegistry] });
 
 export function metricsContent(): Promise<string> {
   return metricsRegistry.metrics();
