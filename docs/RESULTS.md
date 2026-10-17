@@ -189,3 +189,4 @@ CHAOS_PAUSE_MS=0
 - These numbers were captured on a single machine and are not a capacity claim.
 - See docs/DECISIONS.md section H for honest limits.
 - Re-run to reproduce: pnpm load
+- **System headroom:** at 499.86 req/s the Docker stack used 13.61% aggregate CPU and 0.40 GiB of memory. The 500 req/s load level was chosen because the test harness itself became the bottleneck at higher rates, not because the system was saturated. The system has significant headroom beyond 500 req/s on this hardware.
