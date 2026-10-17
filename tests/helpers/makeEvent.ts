@@ -1,6 +1,8 @@
 import type { EventInput } from '../../src/domain/schemas.js';
 
-export function makeEvent(i: number, overrides: Partial<EventInput['payload']> & { type?: EventInput['type'] } = {}): EventInput {
+type EventOverrides = { type?: EventInput['type']; merchant_id?: string; amount_minor?: number; payment_id?: string; payout_id?: string };
+
+export function makeEvent(i: number, overrides: EventOverrides = {}): EventInput {
   const type = overrides.type ?? 'payment.captured';
   const merchant_id = overrides.merchant_id ?? `m_${i % 20}`;
   const amount_minor = overrides.amount_minor ?? 100 + (i % 900);
