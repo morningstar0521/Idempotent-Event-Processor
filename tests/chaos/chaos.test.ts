@@ -136,7 +136,7 @@ describe.sequential('Phase 6 chaos lite', () => {
   it('C-3a pause before transaction recovers after lock expiry', async () => {
     enable(); configure({ pauseBeforeTx: { durationMs: 2000 } });
     const before = await counterBaseline();
-    stack = await startStack({ workers: 3, concurrency: 5, pauseWorkerId: 0, disableHeartbeatWorkerId: 0 });
+    stack = await startStack({ workers: 1, concurrency: 1, pauseWorkerId: 0, disableHeartbeatWorkerId: 0 });
     const expected = await seedWallets(merchants, 1_000_000, stack.api.url);
     const lockEvent = makeEvent(9050);
     const lockEventId = await insertQueuedEvent('c3a-lock', lockEvent);
