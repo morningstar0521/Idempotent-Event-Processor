@@ -43,6 +43,19 @@ async function deadLetter(
   await redisClient.xdel(STREAM, message.id);
 }
 
+async function removeTerminalMessage(
+  message: StreamMessage,
+  redisClient: Redis,
+  queryFn: typeof query,
+): Promise<void> {
+  const result = await queryFn('SELECT status FROM events WHERE id = $1', [message.event_id]);
+  const status = result.rows[0]?.status;
+  if (status === 'processed' || status === 'dead') {
+    await redisClient.xack(STREAM, GROUP, message.id);
+    await redisClient.xdel(STREAM, message.id);
+  }
+}
+
 export async function reclaimOnce(dependencies: ReaperDependencies): Promise<number> {
   const redisClient = dependencies.redisClient ?? redis;
   const handleFn = dependencies.handleFn ?? handle;
@@ -67,6 +80,7 @@ export async function reclaimOnce(dependencies: ReaperDependencies): Promise<num
         continue;
       }
       await handleFn(message);
+      await removeTerminalMessage(message, redisClient, queryFn);
     } catch (error) {
       logger.error({ err: error, event_id: message.event_id, msg_id: message.id }, 'reaper message handling failed');
     }
