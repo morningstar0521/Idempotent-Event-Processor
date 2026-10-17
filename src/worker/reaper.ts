@@ -84,21 +84,21 @@ export async function reclaimOnce(dependencies: ReaperDependencies): Promise<num
   const messages = claimed[1]?.length > 0
     ? claimed[1]
     : await claimPending(redisClient, dependencies.consumerName);
-  for (const [id, fields] of messages) {
+  await Promise.all(messages.map(async ([id, fields]) => {
     const message = messageFromFields(id, fields);
     messagesReclaimed.inc();
     try {
       const count = await deliveryCount(redisClient, id);
       if (count > config.MAX_DELIVERIES) {
         await deadLetter(message, redisClient, queryFn);
-        continue;
+        return;
       }
       await handleFn(message);
       await removeTerminalMessage(message, redisClient, queryFn);
     } catch (error) {
       logger.error({ err: error, event_id: message.event_id, msg_id: message.id }, 'reaper message handling failed');
     }
-  }
+  }));
   return messages.length;
 }
 
