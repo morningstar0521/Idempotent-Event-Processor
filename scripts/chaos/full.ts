@@ -12,7 +12,13 @@ const api = 'http://127.0.0.1:3000/v1/events';
 pool.on('error', () => undefined);
 redis.on('error', () => undefined);
 
-function compose(args: string[]): string { return execFileSync('docker', ['compose', ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim(); }
+function compose(args: string[]): string {
+  return execFileSync('docker', ['compose', ...args], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, LOCK_TTL_MS: '1500', VISIBILITY_TIMEOUT_MS: '1500', RELAY_POLL_MS: '20', BACKOFF_BASE_MS: '20', BACKOFF_CAP_MS: '200', SWEEP_INTERVAL_MS: '500', SWEEP_STALE_MS: '1000', MAX_ATTEMPTS: '5', MAX_DELIVERIES: '5' },
+  }).trim();
+}
 async function reset(): Promise<void> {
   await pool.query('TRUNCATE outbox, events, wallets, ledger_entries RESTART IDENTITY CASCADE');
   await redis.flushall();
