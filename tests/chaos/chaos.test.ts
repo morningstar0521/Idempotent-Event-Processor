@@ -137,7 +137,16 @@ describe.sequential('Phase 6 chaos lite', () => {
     enable(); configure({ pauseBeforeTx: { durationMs: 2000 } });
     const before = await counterBaseline();
     stack = await startStack({ workers: 3, concurrency: 5, pauseWorkerId: 0, disableHeartbeatWorkerId: 0 });
-    await runSeededScenario(stack, 'C-3a', 300);
+    const expected = await seedWallets(merchants, 1_000_000, stack.api.url);
+    const lockEvent = makeEvent(9050);
+    const lockEventId = await insertQueuedEvent('c3a-lock', lockEvent);
+    expected.set(lockEvent.payload.merchant_id, (expected.get(lockEvent.payload.merchant_id) ?? 0) + lockEvent.payload.amount_minor);
+    await publishQueuedEvent(lockEventId);
+    await testRedis.xadd('events:stream', '*', 'event_id', lockEventId);
+    await testRedis.xadd('events:stream', '*', 'event_id', lockEventId);
+    await loadEvents(stack, 300, expected);
+    await waitForDrain();
+    await assertInvariants({ balances: expected, keys: merchants.length + 301 });
     expect(await counterValue(chaosFires, { cause: 'pause_before_tx' })).toBeGreaterThan(before.pauseBefore);
     expect(await counterValue(lockRecovered)).toBeGreaterThan(before.recovered);
     await report('C-3a', before);
