@@ -147,6 +147,14 @@ Each decision is final for v1. The agent must not reverse any of them. If a deci
 ### D31. Deploy: Docker Compose on one EC2 instance with Caddy for HTTPS (stretch)
 - Why: it reuses the QuickPark deployment know-how and shows a real running system. It is first in the cut order (PRD section 12), so the project is complete without it.
 
+### D32. Workers recreate the Redis consumer group after `NOGROUP`
+- Why: `FLUSHALL` or Redis loss can remove both `events:stream` and the `workers` consumer group. A worker that receives `NOGROUP` recreates `events:stream` and `workers` with `XGROUP CREATE ... MKSTREAM`, then resumes `XREADGROUP`.
+- This preserves the recovery path: Postgres remains the source of truth, and the relay sweeper re-enqueues stale `received` and `retrying` events.
+
+### D33. Metrics are process-local and must be scraped before restart
+- Why: each API, relay, and worker process owns its own Prometheus registry. Counters are not shared across processes and are reset when that process restarts.
+- Operational rule: scrape worker metrics from a surviving worker after reaper recovery and relay metrics from the relay after sweeper recovery, before restarting either process. Aggregated reporting must sum compatible process snapshots rather than treating one process as the global total.
+
 ## G. Gaps in the other docs, resolved here
 
 The agent should use these defaults and not stop to ask. They are small and do not change any decision above.

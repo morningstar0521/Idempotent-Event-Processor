@@ -223,6 +223,8 @@ Bumping `updated_at` stops the same events from being swept again every cycle. I
 | `events:delayed` | ZSET | Retry schedule, score = ready time in ms |
 | `lock:event:<event_id>` | String | Per-event lock, value = random token, TTL = `LOCK_TTL_MS` |
 
+The consumer group is recreated automatically on NOGROUP (D32).
+
 After `XACK`, always `XDEL` the message id. Do not use `XTRIM`: it can delete messages that are still pending.
 
 ## 11. Configuration (`.env.example`)
