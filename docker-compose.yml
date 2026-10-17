@@ -30,7 +30,7 @@ services:
 
   migrate:
     build: .
-    entrypoint: ['node', 'dist/scripts/migrate.js']
+    entrypoint: ['node', 'dist/bin/migrate.js']
     environment:
       NODE_ENV: development
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/events
