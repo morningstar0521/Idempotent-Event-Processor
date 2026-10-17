@@ -28,6 +28,16 @@ services:
       timeout: 5s
       retries: 10
 
+  migrate:
+    build: .
+    entrypoint: ['node', 'dist/scripts/migrate.js']
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/events
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api:
     build: .
     environment:
@@ -42,6 +52,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     ports:
       - '3000:3000'
     restart: unless-stopped
@@ -59,6 +71,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   worker:
@@ -74,6 +88,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
 
 volumes:
