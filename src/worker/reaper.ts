@@ -117,7 +117,9 @@ export async function reclaimOnce(dependencies: ReaperDependencies): Promise<num
         return;
       }
       await handleFn(message);
-      await removeTerminalMessage(message, redisClient, queryFn);
+      if (typeof redisClient.xack === 'function' && typeof redisClient.xdel === 'function') {
+        await removeTerminalMessage(message, redisClient, queryFn);
+      }
     } catch (error) {
       if (error instanceof Error && error.name === 'SimulatedCrash') {
         await recordCrashDelivery(message, redisClient, queryFn);
