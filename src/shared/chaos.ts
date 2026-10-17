@@ -18,6 +18,7 @@ export type ChaosOptions = {
   crashAfterCommit?: ChaosProbability;
   pauseBeforeTx?: { durationMs: number };
   pauseInsideTx?: { durationMs: number };
+  pauseEventId?: string;
   poisonEventId?: string;
   failAlwaysEventId?: string;
   crashRelayAfterXadd?: ChaosProbability;
@@ -78,8 +79,9 @@ export function crashAfterRelayXadd(): void {
   }
 }
 
-export async function pause(point: 'before_tx' | 'inside_tx'): Promise<void> {
+export async function pause(point: 'before_tx' | 'inside_tx', eventId?: string): Promise<void> {
   if (!enabled() || (options.pauseAt && options.pauseAt !== point) || (!options.pauseAt && process.env.NODE_ENV !== 'test' && point !== 'before_tx')) return;
+  if (options.pauseEventId && options.pauseEventId !== eventId) return;
   const delay = point === 'before_tx' ? options.pauseBeforeTx?.durationMs : options.pauseInsideTx?.durationMs;
   const configuredDelay = delay ?? config.CHAOS_PAUSE_MS;
   if (configuredDelay > 0) {

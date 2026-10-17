@@ -154,10 +154,11 @@ describe.sequential('Phase 6 chaos lite', () => {
   it('C-3b pause inside transaction records row-lock wait', async () => {
     enable(); configure({ pauseInsideTx: { durationMs: 2000 } });
     const before = await counterBaseline();
-    stack = await startStack({ workers: 3, concurrency: 5, pauseWorkerId: 0, disableHeartbeatWorkerId: 0 });
+    stack = await startStack({ workers: 3, concurrency: 5, pauseWorkerId: -1, disableHeartbeatWorkerId: -1 });
     const expected = await seedWallets(merchants, 1_000_000, stack.api.url);
     const lockEvent = makeEvent(9100);
     const lockEventId = await insertQueuedEvent('c3b-lock', lockEvent);
+    configure({ pauseInsideTx: { durationMs: 2000 }, pauseEventId: lockEventId });
     expected.set(lockEvent.payload.merchant_id, (expected.get(lockEvent.payload.merchant_id) ?? 0) + lockEvent.payload.amount_minor);
     await testQuery('INSERT INTO outbox (event_id, published_at) VALUES ($1, now())', [lockEventId]);
     await testRedis.xadd('events:stream', '*', 'event_id', lockEventId);

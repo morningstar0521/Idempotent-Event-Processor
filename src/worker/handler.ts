@@ -54,7 +54,7 @@ export async function processInTx(id: string, lostLock = () => false, withTxFn: 
       if (lostLock()) lockRecovered.inc();
       return 'skipped';
     }
-    await pauseFn('inside_tx');
+    await pauseFn('inside_tx', id);
     poison(id);
     failBeforeEffect(id);
     await applyEffect(client, row.type, row.payload, id);
@@ -90,7 +90,7 @@ export async function handle(msg: StreamMessage, dependencies: HandlerDependenci
   const started = process.hrtime.bigint();
   let simulatedCrash = false;
   try {
-    await pauseFn('before_tx');
+    await pauseFn('before_tx', msg.event_id);
     const outcome = await processInTx(msg.event_id, () => hb.lostLock, withTxFn, pauseFn);
     await crashAfterCommit(msg.event_id);
     await ackAndDelete(msg, redisClient);
