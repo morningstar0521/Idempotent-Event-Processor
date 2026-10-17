@@ -89,7 +89,7 @@ export async function reclaimOnce(dependencies: ReaperDependencies): Promise<num
     messagesReclaimed.inc();
     try {
       const count = await deliveryCount(redisClient, id);
-      if (count > config.MAX_DELIVERIES) {
+      if (count >= config.MAX_DELIVERIES) {
         await deadLetter(message, redisClient, queryFn);
         return;
       }
