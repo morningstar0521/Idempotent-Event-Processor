@@ -88,7 +88,7 @@ export class Reaper {
         .then(() => undefined)
         .catch((error) => logger.error({ err: error }, 'reaper cycle failed'))
         .finally(() => { this.current = undefined; });
-    }, 5000);
+    }, Math.max(100, Math.floor(config.VISIBILITY_TIMEOUT_MS / 2)));
   }
 
   async stop(): Promise<void> {
