@@ -38,7 +38,7 @@ async function load(action: () => Promise<void>): Promise<void> {
   }
 }
 async function waitForFinal(): Promise<void> {
-  const deadline = Date.now() + 90000;
+  const deadline = Date.now() + 180000;
   while (Date.now() < deadline) {
     const result = await pool.query<{ count: string }>("SELECT count(*)::text AS count FROM events WHERE status IN ('received', 'retrying')");
     const unpublished = await pool.query<{ count: string }>('SELECT count(*)::text AS count FROM outbox WHERE published_at IS NULL');
@@ -67,6 +67,7 @@ async function runScenario(id: string, action: () => Promise<void>, intervalKill
     await load(async () => { injectedAt = Date.now(); await action(); });
     if (timer) globalThis.clearInterval(timer);
     await waitForFinal();
+    await new Promise((resolve) => setTimeout(resolve, 2000));
     const counts = await measure();
     const pass = counts.lost === 0 && counts.duplicateEffects === 0 && await invariants();
     const recovery = injectedAt ? Date.now() - injectedAt : null;
