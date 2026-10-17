@@ -56,6 +56,18 @@ async function removeTerminalMessage(
   }
 }
 
+async function claimPending(
+  redisClient: Redis,
+  consumerName: string,
+): Promise<Array<[string, string[]]>> {
+  const pending = await redisClient.xpending(STREAM, GROUP, '-', '+', 50) as Array<[string, string, number, number]>;
+  const ids = pending
+    .filter(([, , idle]) => idle >= config.VISIBILITY_TIMEOUT_MS)
+    .map(([id]) => id);
+  if (ids.length === 0) return [];
+  return await redisClient.xclaim(STREAM, GROUP, consumerName, config.VISIBILITY_TIMEOUT_MS, ...ids) as Array<[string, string[]]>;
+}
+
 export async function reclaimOnce(dependencies: ReaperDependencies): Promise<number> {
   const redisClient = dependencies.redisClient ?? redis;
   const handleFn = dependencies.handleFn ?? handle;
@@ -69,7 +81,9 @@ export async function reclaimOnce(dependencies: ReaperDependencies): Promise<num
     'COUNT',
     50,
   ) as [string, Array<[string, string[]]>, string[]];
-  const messages = claimed[1] ?? [];
+  const messages = claimed[1]?.length > 0
+    ? claimed[1]
+    : await claimPending(redisClient, dependencies.consumerName);
   for (const [id, fields] of messages) {
     const message = messageFromFields(id, fields);
     messagesReclaimed.inc();
