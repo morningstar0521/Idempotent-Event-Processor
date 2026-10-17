@@ -72,14 +72,8 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@postgres:5432/events}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       METRICS_PORT: 9101
-      LOCK_TTL_MS: ${LOCK_TTL_MS:-30000}
-      VISIBILITY_TIMEOUT_MS: ${VISIBILITY_TIMEOUT_MS:-30000}
-      BACKOFF_BASE_MS: ${BACKOFF_BASE_MS:-500}
-      BACKOFF_CAP_MS: ${BACKOFF_CAP_MS:-30000}
       SWEEP_INTERVAL_MS: ${SWEEP_INTERVAL_MS:-30000}
       SWEEP_STALE_MS: ${SWEEP_STALE_MS:-120000}
-      MAX_ATTEMPTS: ${MAX_ATTEMPTS:-5}
-      MAX_DELIVERIES: ${MAX_DELIVERIES:-10}
     depends_on:
       postgres:
         condition: service_healthy
