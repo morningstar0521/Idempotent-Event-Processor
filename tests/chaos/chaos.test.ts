@@ -90,7 +90,7 @@ describe.sequential('Phase 6 chaos lite', () => {
   it('C-9 same-key storm creates one event and one effect', async () => {
     stack = await startStack({ workers: 3, concurrency: 5 });
     const event = makeEvent(9000);
-    const responses = await Promise.all(Array.from({ length: 500 }, (_, index) => postEvent('same-key-storm', event, stack.api.url)));
+    const responses = await Promise.all(Array.from({ length: 500 }, () => postEvent('same-key-storm', event, stack.api.url)));
     expect(responses.filter(({ status }) => status === 202)).toHaveLength(1);
     expect(responses.filter(({ status }) => status === 200)).toHaveLength(499);
     await waitForDrain();
