@@ -86,7 +86,11 @@ try {
   await runScenario('CF-3', async () => { compose(['restart', 'redis']); });
   await runScenario('CF-4', async () => { compose(['restart', 'postgres']); });
   await runScenario('CF-5', async () => { const worker = workerIds()[0]; if (!worker) throw new Error('No worker container'); execFileSync('docker', ['stop', worker], { stdio: 'pipe' }); });
-  await runScenario('CF-6', async () => { killWorker(); compose(['exec', '-T', 'redis', 'redis-cli', 'FLUSHALL']); }, true);
+  await runScenario('CF-6', async () => {
+    compose(['exec', '-T', 'redis', 'redis-cli', 'FLUSHALL']);
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    killWorker();
+  }, true);
 } finally {
   await mkdir('scripts/chaos', { recursive: true });
   await writeFile('scripts/chaos/results.json', JSON.stringify({ generated_at: new Date().toISOString(), results }, null, 2) + '\n');
