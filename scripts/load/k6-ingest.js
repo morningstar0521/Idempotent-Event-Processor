@@ -10,11 +10,13 @@ const status202 = new Counter('responses_202');
 const status200 = new Counter('responses_200');
 const status422 = new Counter('responses_422');
 const statusErrors = new Counter('responses_errors');
+const summaryTrendStats = ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'];
 
 export const options = scenario === 'smoke'
   ? {
       vus: 1,
       iterations: 10,
+      summaryTrendStats,
       thresholds: { checks: ['rate>0.999'], http_req_failed: ['rate<0.001'] },
     }
   : scenario === 'same_key_storm'
@@ -22,6 +24,7 @@ export const options = scenario === 'smoke'
         scenarios: {
           storm: { executor: 'shared-iterations', vus: 1000, iterations: 1000, maxDuration: '2m' },
         },
+        summaryTrendStats,
         thresholds: { checks: ['rate>0.999'], http_req_failed: ['rate<0.001'], responses_202: ['count==1'], responses_200: ['count==999'] },
       }
     : {
@@ -36,6 +39,7 @@ export const options = scenario === 'smoke'
             maxVUs: Number(__ENV.MAX_VUS || 200),
           },
         },
+        summaryTrendStats,
         thresholds: { checks: ['rate>0.999'], http_req_failed: ['rate<0.001'] },
       };
 
