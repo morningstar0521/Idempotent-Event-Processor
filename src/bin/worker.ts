@@ -4,8 +4,8 @@ import { metricsContent } from '../shared/metrics.js';
 import { redis } from '../shared/redis.js';
 import { pool } from '../shared/db.js';
 import { logger } from '../shared/logger.js';
-import { Worker } from '../worker/worker.js';
 import { releaseHeldLocks } from '../worker/handler.js';
+import { createWorkerRuntime } from './factories.js';
 
 const metrics = express();
 metrics.get('/metrics', async (_request, response) => {
@@ -14,8 +14,8 @@ metrics.get('/metrics', async (_request, response) => {
 const metricsServer = metrics.listen(config.METRICS_PORT, () => {
   console.log(`Worker metrics listening on ${config.METRICS_PORT}`);
 });
-const worker = new Worker();
-const loop = worker.start().catch((error) => {
+const { worker, loop: workerLoop } = createWorkerRuntime();
+const loop = workerLoop.catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });

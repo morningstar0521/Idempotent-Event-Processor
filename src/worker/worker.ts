@@ -1,5 +1,6 @@
 import os from 'node:os';
 import type { Redis } from 'ioredis';
+import type { QueryResult, QueryResultRow } from 'pg';
 import { config } from '../shared/config.js';
 import { streamPending } from '../shared/metrics.js';
 import { redis } from '../shared/redis.js';
@@ -15,6 +16,7 @@ export interface WorkerOptions {
   concurrency?: number;
   consumerName?: string;
   handleFn?: typeof handle;
+  queryFn?: <T extends QueryResultRow = QueryResultRow>(text: string, values?: unknown[]) => Promise<QueryResult<T>>;
 }
 
 export class Worker {
@@ -33,7 +35,7 @@ export class Worker {
     this.concurrency = options.concurrency ?? config.WORKER_CONCURRENCY;
     this.consumerName = options.consumerName ?? `${os.hostname()}-${process.pid}`;
     this.handleFn = options.handleFn ?? handle;
-    this.reaper = new Reaper({ redisClient: this.redisClient, consumerName: this.consumerName, handleFn: this.handleFn });
+    this.reaper = new Reaper({ redisClient: this.redisClient, consumerName: this.consumerName, handleFn: this.handleFn, queryFn: options.queryFn });
   }
 
   async start(): Promise<void> {
@@ -51,6 +53,13 @@ export class Worker {
     await this.loopPromise;
     await Promise.all([...this.active]);
     await releaseHeldLocks();
+  }
+
+  async kill(): Promise<void> {
+    this.stopped = true;
+    if (this.mover) globalThis.clearInterval(this.mover);
+    await this.reaper.stop();
+    await this.loopPromise;
   }
 
   private async run(): Promise<void> {

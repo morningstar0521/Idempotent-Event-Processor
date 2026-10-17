@@ -10,7 +10,9 @@ import { requestLogging } from './middleware/request-logging.js';
 import { registerEventRoutes, type EventRouteOptions } from './routes/events.js';
 import { registerAdminRoutes, type AdminRouteOptions } from './routes/admin.js';
 
-export function createApp(options: EventRouteOptions & AdminRouteOptions & { redisClient?: Redis } = {}) {
+export type ServerOptions = EventRouteOptions & AdminRouteOptions & { redisClient?: Redis };
+
+export function createApp(options: ServerOptions = {}) {
   const app = express();
   const queryFn = options.queryFn ?? query;
   const redisClient = options.redisClient ?? redis;
@@ -37,7 +39,7 @@ export function createApp(options: EventRouteOptions & AdminRouteOptions & { red
   return app;
 }
 
-export function startServer(port: number): Server {
-  return createApp().listen(port, () => console.log(`API listening on ${port}`));
+export function startServer(port: number, options: ServerOptions = {}): Server {
+  return createApp(options).listen(port, () => console.log(`API listening on ${port}`));
 }
 

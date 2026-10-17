@@ -2,8 +2,8 @@ import express from 'express';
 import { config } from '../shared/config.js';
 import { metricsContent } from '../shared/metrics.js';
 import { logger } from '../shared/logger.js';
-import { closeRelayResources, Relay } from '../relay/relay.js';
-import { Sweeper } from '../relay/sweeper.js';
+import { closeRelayResources } from '../relay/relay.js';
+import { createRelayRuntime } from './factories.js';
 
 const metrics = express();
 metrics.get('/metrics', async (_request, response) => {
@@ -12,10 +12,7 @@ metrics.get('/metrics', async (_request, response) => {
 const metricsServer = metrics.listen(config.METRICS_PORT, () => {
   console.log(`Relay metrics listening on ${config.METRICS_PORT}`);
 });
-const relay = new Relay();
-const loop = relay.start();
-const sweeper = new Sweeper();
-sweeper.start();
+const { relay, sweeper, loop } = createRelayRuntime();
 let stopping = false;
 
 async function stop(): Promise<void> {
