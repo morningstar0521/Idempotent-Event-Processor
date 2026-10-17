@@ -1,0 +1,71 @@
+{
+  "generated_at": "2026-10-17T22:15:58.481Z",
+  "results": [
+    {
+      "id": "CF-1",
+      "unique": 500,
+      "processed": 500,
+      "dead": 0,
+      "lost": 0,
+      "duplicateEffects": 0,
+      "status": "PASS",
+      "recovery_ms": 46674,
+      "invariants": true
+    },
+    {
+      "id": "CF-2",
+      "unique": 500,
+      "processed": 500,
+      "dead": 0,
+      "lost": 0,
+      "duplicateEffects": 0,
+      "status": "PASS",
+      "recovery_ms": 2722,
+      "invariants": true
+    },
+    {
+      "id": "CF-3",
+      "unique": 500,
+      "processed": 500,
+      "dead": 0,
+      "lost": 0,
+      "duplicateEffects": 0,
+      "status": "PASS",
+      "recovery_ms": 3715,
+      "invariants": true
+    },
+    {
+      "id": "CF-4",
+      "unique": 500,
+      "processed": 500,
+      "dead": 0,
+      "lost": 0,
+      "duplicateEffects": 0,
+      "status": "PASS",
+      "recovery_ms": 3485,
+      "invariants": true
+    },
+    {
+      "id": "CF-5",
+      "unique": 500,
+      "processed": 500,
+      "dead": 0,
+      "lost": 0,
+      "duplicateEffects": 0,
+      "status": "PASS",
+      "recovery_ms": 2592,
+      "invariants": true
+    },
+    {
+      "id": "CF-6",
+      "unique": 500,
+      "processed": 500,
+      "dead": 0,
+      "lost": 0,
+      "duplicateEffects": 0,
+      "status": "PASS",
+      "recovery_ms": 8652,
+      "invariants": true
+    }
+  ]
+}
