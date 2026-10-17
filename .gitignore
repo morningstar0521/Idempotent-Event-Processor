@@ -3,4 +3,5 @@ node_modules
 dist
 scripts/load/plan.json
 coverage
+.DS_Store
 
