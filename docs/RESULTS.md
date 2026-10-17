@@ -4,9 +4,9 @@ Status: PASS
 
 ## Header
 
-- Run date: 2026-10-17T23:03:35.199Z
-- Git SHA: 3c704014180cc42e23847bb9f85d9e5de09c376b
-- Node: v26.5.0
+- Run date: 2026-10-17T23:20:15.051Z
+- Git SHA: 7cb953f478bb94b2f8eb6e767da3698ebf8fde39
+- Node: v26.5.0 (Current release; not a preview build)
 - Machine: Apple M1 Pro; 10 cores; 16 GiB RAM; darwin 24.6.0
 - Docker server: 29.8.2
 - Worker count: 3
@@ -46,6 +46,8 @@ CHAOS_PAUSE_MS=0
 
 ## Requests
 
+- `dup_heavy` sends each unique event 3 times: 200% duplicate traffic.
+
 | Metric | Measured |
 |---|---:|
 | Total requests sent | 1500 |
@@ -59,15 +61,16 @@ CHAOS_PAUSE_MS=0
 
 | Metric | Measured |
 |---|---:|
-| Ingest rate (requests/sec) | 25.00 |
-| Processed rate (events/sec) | 16.71 |
+| Ingest rate (requests/sec) | 499.86 |
+| Processed rate (events/sec) | 172.53 |
 
-## Latency (dup_heavy)
+## Latency by scenario
 
-| Source | p50 (ms) | p95 (ms) | p99 (ms) |
-|---|---:|---:|---:|
-| API request duration | 5.58 | 9.29 | 12.70 |
-| End-to-end | 59.49 | 107.44 | 114.11 |
+| Scenario | API p50 (ms) | API p95 (ms) | API p99 (ms) | E2E p95 (ms) |
+|---|---:|---:|---:|---:|
+| smoke | 1.88 | 3.89 | 4.31 | 102.46 |
+| dup_heavy | 1.60 | 3.78 | 8.01 | 106.83 |
+| same_key_storm | 311.83 | 1066.52 | 1090.94 | 134.96 |
 
 ## Duplicates blocked by layer
 
@@ -178,6 +181,7 @@ CHAOS_PAUSE_MS=0
 
 ## Notes
 
+- Test machine: Apple M1 Pro. These numbers are not comparable to production servers.
 - These numbers were captured on a single machine and are not a capacity claim.
 - See docs/DECISIONS.md section H for honest limits.
 - Re-run to reproduce: pnpm load
