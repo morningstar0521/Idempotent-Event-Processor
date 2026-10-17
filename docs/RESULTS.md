@@ -72,6 +72,8 @@ CHAOS_PAUSE_MS=0
 | dup_heavy | 1.60 | 3.78 | 8.01 | 106.83 |
 | same_key_storm | 311.83 | 1066.52 | 1090.94 | 134.96 |
 
+**Note on same_key_storm:** p95 of 1066 ms is not a system latency figure. It is the expected cost of PostgreSQL serializing 1000 concurrent `INSERT ... ON CONFLICT (idempotency_key)` attempts on a single unique index entry. One request acquires the index entry, 999 wait. This scenario is deliberately pathological - it validates the duplicate-blocking path under extreme contention, not steady-state latency. In production, a client sending 1000 parallel requests for the same key is a client-side bug; the system still produces exactly 1 event and 1 effect (see C-9: processed=1, dup_blocked{api}=499).
+
 ## Duplicates blocked by layer
 
 | Layer | Count |
