@@ -115,7 +115,7 @@ Status: PASS
 
 - Run date: ${new Date().toISOString()}
 - Git SHA: ${gitSha}
-- Node: ${process.version}
+- Node: ${process.version} (Current release; not a preview build)
 - Machine: ${cpu}; ${os.cpus().length} cores; ${format(os.totalmem() / 1024 / 1024 / 1024)} GiB RAM; ${os.platform()} ${os.release()}
 - Docker server: ${dockerVersion}
 - Worker count: ${workerCount}
@@ -127,6 +127,8 @@ ${config.trim()}
 \`\`\`
 
 ## Requests
+
+- \`dup_heavy\` sends each unique event 3 times: 200% duplicate traffic.
 
 | Metric | Measured |
 |---|---:|
@@ -177,6 +179,7 @@ ${chaos.trim()}
 
 ## Notes
 
+- Test machine: Apple M1 Pro. These numbers are not comparable to production servers.
 - These numbers were captured on a single machine and are not a capacity claim.
 - See docs/DECISIONS.md section H for honest limits.
 - Re-run to reproduce: pnpm load
