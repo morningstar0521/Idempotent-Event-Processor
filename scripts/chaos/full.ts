@@ -9,6 +9,8 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL ?? 'postgres:
 const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379');
 const results: Result[] = [];
 const api = 'http://127.0.0.1:3000/v1/events';
+pool.on('error', () => undefined);
+redis.on('error', () => undefined);
 
 function compose(args: string[]): string { return execFileSync('docker', ['compose', ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim(); }
 async function reset(): Promise<void> {
