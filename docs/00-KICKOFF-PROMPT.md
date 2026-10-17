@@ -43,7 +43,7 @@ Postgres is the source of truth. Redis only helps with delivery and speed. The R
 - Write the tests for a phase before or together with the code.
 - At the end of each phase: run the exit criteria commands, paste the real output, list any deviation from the docs, then STOP and wait for my go-ahead.
 - If two docs conflict, or something is missing, do not guess. Add it to `docs/OPEN-QUESTIONS.md` and ask me.
-- Never write the word "exactly-once" in code, comments, README, or docs. Use: "at-least-once delivery with idempotent processing".
+- Never use the prohibited guarantee wording in code, comments, README, or docs. Use: "at-least-once delivery with idempotent processing".
 - Never invent benchmark numbers. Only report numbers produced by the scripts in this repo.
 - Do not add new infrastructure or libraries outside the stack in `AGENTS.md` without asking.
 

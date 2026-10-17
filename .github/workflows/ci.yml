@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: events
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d events"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/events
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/events_test
+      REDIS_URL: redis://localhost:6379
+      TEST_REDIS_URL: redis://localhost:6379/15
+      API_KEY: change-me
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test:unit
+      - run: pnpm migrate
+      - run: pnpm test:integration
+      - run: pnpm test:chaos
+      - run: docker build .
+      - name: Check banned phrase and long dash
+        run: |
+          if rg -n -i --glob '!AGENTS.md' --glob '!docs/TESTING.md' 'exactly.?once' src docs README.md tests scripts; then
+            echo 'Banned phrase found.' >&2
+            exit 1
+          fi
+          if rg -n $'\u2014' src docs README.md tests scripts; then
+            echo 'Long dash found.' >&2
+            exit 1
+          fi

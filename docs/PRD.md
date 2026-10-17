@@ -10,7 +10,7 @@ This project accepts events and makes sure **each unique event changes the syste
 
 > At-least-once delivery with idempotent processing. Each unique idempotency key produces at most one business effect.
 
-The word "exactly-once" is not used anywhere in this project.
+The guarantee wording above is the only delivery guarantee used in this project.
 
 ## 3. Use case (the business effect)
 
