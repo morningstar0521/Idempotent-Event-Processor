@@ -159,8 +159,10 @@ describe.sequential('Phase 6 chaos lite', () => {
     const lockEvent = makeEvent(9100);
     const lockEventId = await insertQueuedEvent('c3b-lock', lockEvent);
     expected.set(lockEvent.payload.merchant_id, (expected.get(lockEvent.payload.merchant_id) ?? 0) + lockEvent.payload.amount_minor);
-    await publishQueuedEvent(lockEventId);
-    await Promise.all(Array.from({ length: 20 }, () => testRedis.xadd('events:stream', '*', 'event_id', lockEventId)));
+    await testQuery('INSERT INTO outbox (event_id, published_at) VALUES ($1, now())', [lockEventId]);
+    await testRedis.xadd('events:stream', '*', 'event_id', lockEventId);
+    await new Promise((resolve) => setTimeout(resolve, 1600));
+    await testRedis.xadd('events:stream', '*', 'event_id', lockEventId);
     await loadEvents(stack, 300, expected);
     await waitForDrain();
     await assertInvariants({ balances: expected, keys: merchants.length + 301 });
