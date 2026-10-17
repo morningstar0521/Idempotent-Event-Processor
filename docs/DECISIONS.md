@@ -97,6 +97,7 @@ Each decision is final for v1. The agent must not reverse any of them. If a deci
 ### D19. Replay is a conditional update, so only one caller wins
 - Why: `UPDATE ... WHERE status='dead' RETURNING` is atomic. Others get no row and a 409. Replay resets `attempts` to 0.
 - Detail: if `XADD` fails after the update, the response is still 202. The event is `retrying` in Postgres, and the sweeper will enqueue it.
+- I-RTY-8 has two valid scopes. Route-level CI tests the single-instant atomicity of the conditional update: one concurrent caller returns 202 and the rest return 409. In live operation, a still-failing replay can be processed and moved back to `dead` before later requests arrive, so repeated replay requests over time can each return 202. Both behaviors are correct; the ledger constraint still prevents duplicate business effects. Operators should fix the underlying cause before replaying.
 
 ### D20. The sweeper recovers from Postgres and uses an advisory lock
 - Why: this is what makes "wipe Redis, lose nothing" true. It finds `received` and `retrying` events not updated for `SWEEP_STALE_MS`, bumps `updated_at`, and re-adds them to the stream.

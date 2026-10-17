@@ -136,6 +136,8 @@ I-WRK-6 and I-WRK-8 require the Phase 4 `handleFailure` implementation and are s
 | I-WRK-6 | Payout with insufficient funds | Status `dead`, `attempts=1`, `last_error=INSUFFICIENT_FUNDS`, kind `permanent`, no retry scheduled (`events:delayed` empty), message acked | F10, FR-10 |
 | I-WRK-8 | Unknown event type or payload that fails the schema at the worker (insert directly into DB) | `dead`, permanent | ARCHITECTURE 7 |
 
+I-RTY-8 is a route-level atomicity test. Its one-202/nineteen-409 result applies when the requests contend on the same `dead` row at one instant. In live operation, if the cause is still present, the worker can re-dead-letter the event between requests, allowing later replay attempts to return 202. Operators must fix the cause before replaying; the ledger constraint prevents duplicate effects.
+
 ### 5.5 Reaper and sweeper
 
 | ID | Scenario | Expected | Maps to |
