@@ -100,6 +100,7 @@ try {
     compose(['exec', '-T', 'postgres', 'psql', '-U', 'postgres', '-d', 'events', '-c', "UPDATE events SET updated_at = now() - interval '2 minutes' WHERE status IN ('received', 'retrying')"]);
     await new Promise((resolve) => setTimeout(resolve, 5000));
     killWorker();
+    compose(['restart', 'worker', 'relay']);
   }, true);
 } finally {
   await mkdir('scripts/chaos', { recursive: true });
