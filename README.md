@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/morningstar0521/Idempotent-Event-Processor/actions/workflows/ci.yml/badge.svg)](https://github.com/morningstar0521/Idempotent-Event-Processor/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Node](https://img.shields.io/badge/node-20.x-green.svg)]()
+[![Node](https://img.shields.io/badge/node-20.x-green.svg)](.github/workflows/ci.yml)
 [![Invariants](https://img.shields.io/badge/invariants-10%2F10%20passing-success.svg)](docs/RESULTS.md)
 [![Chaos](https://img.shields.io/badge/chaos-15%20scenarios%20passing-brightgreen.svg)](docs/RESULTS.md)
 
