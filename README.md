@@ -50,8 +50,6 @@ They found 8 distinct root causes in the recovery layer. Here are the 8 most imp
 
 The pattern: every bug was in the **recovery layer** - the code that only runs when something else has already gone wrong.
 
-Every chaos commit above is a real test that now passes. Those tests are what "chaos-tested" means in this project.
-
 ---
 
 ## Architecture
