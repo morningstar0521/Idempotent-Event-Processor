@@ -135,7 +135,7 @@ From a real run on an Apple M1 Pro with 3 workers:
 | Invariants | 10 / 10 |
 | CPU at peak load | 13.61% - significant headroom |
 
-The 500 req/s figure is the offered load, not the system ceiling. The k6 harness saturated before the system did (13.61% CPU at peak). A longer-duration ceiling test is in RESULTS.md section [Processing ceiling](docs/RESULTS.md#processing-ceiling-3-workers).
+The 500 req/s figure is the offered load, not the system ceiling. The k6 harness saturated before the system did (13.61% CPU at peak). A 90-second run is in RESULTS.md section [Longer-run processing test](docs/RESULTS.md#longer-run-processing-test-3-workers). That run measures sustained processing, not a hard ceiling.
 
 On the same-key storm, p95 measured 1,066.52 ms. That is not a system latency figure. It is PostgreSQL serializing 1,000 concurrent `INSERT ... ON CONFLICT` attempts on a single unique index entry - deliberately pathological, validating duplicate-blocking under extreme contention. See [docs/RESULTS.md](docs/RESULTS.md) for the full note.
 

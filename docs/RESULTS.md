@@ -63,7 +63,7 @@ CHAOS_PAUSE_MS=0
 | Ingest rate (total requests/sec) | 199.97 |
 | Unique event rate (events/sec) | 200.08 |
 
-## Processing ceiling (3 workers)
+## Longer-run processing test (3 workers)
 
 | Metric | Value |
 |---|---:|
