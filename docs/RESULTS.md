@@ -4,8 +4,8 @@ Status: PASS
 
 ## Header
 
-- Run date: 2026-10-18T00:33:07.135Z
-- Git SHA: 71271a93cba3dd5264895ff11dd5a2fb84e9af16
+- Run date: 2026-10-18T00:39:05.754Z
+- Git SHA: 045363e5eefa1481377886db3e3c08ddce0a5830
 - Node: v26.5.0
 - Load test runtime note: This load test was run on Node v26.5.0. CI and Docker use Node 20 (LTS). Both versions pass the identical test suite; the load test numbers are indicative.
 - Machine: Apple M1 Pro; 10 cores; 16 GiB RAM; darwin 24.6.0
@@ -45,7 +45,7 @@ CHAOS_PAUSE_MS=0
 
 ## Requests
 
-- `dup_heavy` sends each unique event 3 times: 200% duplicate traffic.
+- ceiling sends each unique event once: 0% duplicate traffic.
 
 | Metric | Measured |
 |---|---:|

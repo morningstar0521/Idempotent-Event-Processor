@@ -149,7 +149,7 @@ ${config.trim()}
 
 ## Requests
 
-- \`dup_heavy\` sends each unique event 3 times: 200% duplicate traffic.
+- ${plan.scenario === 'ceiling' ? 'ceiling sends each unique event once: 0% duplicate traffic.' : 'dup_heavy sends each unique event 3 times: 200% duplicate traffic.'}
 
 | Metric | Measured |
 |---|---:|
