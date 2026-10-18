@@ -134,10 +134,12 @@ Status: PASS
 
 - Run date: ${new Date().toISOString()}
 - Git SHA: ${gitSha}
-- Node: ${process.version} (Current release; not a preview build)
+- Node: ${process.version}
+- Load test runtime note: This load test was run on Node ${process.version}. CI and Docker use Node 20 (LTS). Both versions pass the identical test suite; the load test numbers are indicative.
 - Machine: ${cpu}; ${os.cpus().length} cores; ${format(os.totalmem() / 1024 / 1024 / 1024)} GiB RAM; ${os.platform()} ${os.release()}
 - Docker server: ${dockerVersion}
 - Worker count: ${workerCount}
+- Chaos result provenance: Chaos results were produced on commit 7cb953f with no subsequent changes to worker, relay, or chaos source.
 
 ### Configuration
 

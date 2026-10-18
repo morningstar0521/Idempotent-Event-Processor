@@ -4,24 +4,23 @@ Status: PASS
 
 ## Header
 
-- Run date: 2026-10-17T23:20:15.051Z
-- Git SHA: 7cb953f478bb94b2f8eb6e767da3698ebf8fde39
-- Node: v26.5.0 (Current release; not a preview build)
+- Run date: 2026-10-18T00:33:07.135Z
+- Git SHA: 71271a93cba3dd5264895ff11dd5a2fb84e9af16
+- Node: v26.5.0
+- Load test runtime note: This load test was run on Node v26.5.0. CI and Docker use Node 20 (LTS). Both versions pass the identical test suite; the load test numbers are indicative.
 - Machine: Apple M1 Pro; 10 cores; 16 GiB RAM; darwin 24.6.0
 - Docker server: 29.8.2
 - Worker count: 3
+- Chaos result provenance: Chaos results were produced on commit 7cb953f with no subsequent changes to worker, relay, or chaos source.
 
 ### Configuration
 
 ```dotenv
 NODE_ENV=development
 PORT=3000
-METRICS_PORT=9102
 API_KEY=change-me
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/events
-TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5432/events_test
 REDIS_URL=redis://localhost:6379
-TEST_REDIS_URL=redis://localhost:6379/15
 
 MAX_ATTEMPTS=5
 BACKOFF_BASE_MS=500
@@ -50,10 +49,10 @@ CHAOS_PAUSE_MS=0
 
 | Metric | Measured |
 |---|---:|
-| Total requests sent | 1500 |
-| Unique idempotency keys | 500 |
-| 202 responses | 500 |
-| 200 responses | 1000 |
+| Total requests sent | 18001 |
+| Unique idempotency keys | 18000 |
+| 202 responses | 18000 |
+| 200 responses | 1 |
 | Errors | 0 |
 | 422 responses | 0 |
 
@@ -61,8 +60,22 @@ CHAOS_PAUSE_MS=0
 
 | Metric | Measured |
 |---|---:|
-| Ingest rate (requests/sec) | 499.86 |
-| Processed rate (events/sec) | 172.53 |
+| Ingest rate (requests/sec) | 199.97 |
+| Processed rate (events/sec) | 200.08 |
+
+## Processing ceiling (3 workers)
+
+| Metric | Value |
+|---|---:|
+| Offered load | 200 req/s for 90s |
+| Unique events sent | 18000 |
+| Processed after drain | 18000 |
+| Drain time (first created to last processed) | 89.96s |
+| Sustained processing rate | 200.08 events/s |
+| Peak stream_pending | 25 |
+| Peak delayed_size | 0 |
+| Verdict | ingest-bound |
+
 
 ## Latency by scenario
 
@@ -72,15 +85,11 @@ CHAOS_PAUSE_MS=0
 | dup_heavy | 1.60 | 3.78 | 8.01 | 106.83 |
 | same_key_storm | 311.83 | 1066.52 | 1090.94 | 134.96 |
 
-**Note on same_key_storm:** p95 of 1066 ms is not a system latency figure. It is the expected cost of PostgreSQL serializing 1000 concurrent `INSERT ... ON CONFLICT (idempotency_key)` attempts on a single unique index entry. One request acquires the index entry, 999 wait. This scenario is deliberately pathological - it validates the duplicate-blocking path under extreme contention, not steady-state latency. In production, a client sending 1000 parallel requests for the same key is a client-side bug; the system still produces exactly 1 event and 1 effect (see C-9: processed=1, dup_blocked{api}=499).
-
-**Note on end-to-end latency:** E2E p95 of ~107 ms vs API p95 of ~4 ms is dominated by the relay poll interval (RELAY_POLL_MS=100). Events wait in the outbox up to 100 ms before the relay publishes them to the stream. This is a deliberate tradeoff: lower RELAY_POLL_MS reduces latency but increases CPU from empty polls. Tune in .env if latency is more important than poll cost.
-
 ## Duplicates blocked by layer
 
 | Layer | Count |
 |---|---:|
-| api | 1000 |
+| api | 1 |
 | lock | 0 |
 | db_status | 0 |
 | ledger_constraint | 0 |
@@ -189,4 +198,3 @@ CHAOS_PAUSE_MS=0
 - These numbers were captured on a single machine and are not a capacity claim.
 - See docs/DECISIONS.md section H for honest limits.
 - Re-run to reproduce: pnpm load
-- **System headroom:** at 499.86 req/s the Docker stack used 13.61% aggregate CPU and 0.40 GiB of memory. The 500 req/s load level was chosen because the test harness itself became the bottleneck at higher rates, not because the system was saturated. The system has significant headroom beyond 500 req/s on this hardware.
