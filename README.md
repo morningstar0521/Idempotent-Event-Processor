@@ -20,7 +20,7 @@ A production-style TypeScript backend for payment events. PostgreSQL is the sour
 |---|---|
 | **API throughput (offered load)** | **500 req/s** |
 | **API p95 latency at 500 req/s** | **3.78 ms** |
-| **Sustained processing rate** | **200.08 events/s** |
+| **Sustained processing rate** | **>=200 events/s** (worker kept up with 200 req/s for 90s; ceiling not measured) |
 | **Lost events (all chaos scenarios)** | **0** |
 | **Duplicate effects (all chaos scenarios)** | **0** |
 | **Correctness invariants** | **10 / 10 passing** |
@@ -39,15 +39,15 @@ They found 10 distinct root causes in the recovery layer. Here are the 9 most im
 
 | Bug | Commit | What was wrong |
 |---|---|---|
-| Reaper not scheduling after visibility timeout | `d734c53` | Orphaned messages sat in the PEL until manual intervention |
-| Worker stopped polling after an isolated handler crash | `4f3957c` | A single crash could kill the read loop |
-| Reaper fell through after visibility window | `d1d33fd` | Messages stranded if stream state changed under it |
-| Poison messages not capping at MAX_DELIVERIES | `7dba828` | A forever-crashing event could loop workers indefinitely |
-| Crash deliveries not capped in Postgres | `14cecaa` | Stream delivery count and DB attempt count diverged |
-| Reaper batches processed serially | `402baa9` | Recovery throughput was 1/N of available |
-| Postgres restart left workers disconnected | `0773a61` | Did not reconnect cleanly after DB restart |
-| Combined Redis wipe + worker kill stranded events | `923c92b` | Two failures at once were not sequenced |
-| Stale-row recovery broken after CF-6 | `e9aecb9` | Full stack recovery service restart was missing |
+| Reaper not scheduling after visibility timeout | d734c53 | Orphaned messages sat in the PEL until manual intervention |
+| Worker stopped polling after an isolated handler crash | 4f3957c | A single crash could kill the read loop |
+| Reaper fell through after visibility window | d1d33fd | Messages stranded if stream state changed under it |
+| Poison messages not capping at MAX_DELIVERIES | 7dba828 | A forever-crashing event could loop workers indefinitely |
+| Crash deliveries not capped in Postgres | 14cecaa | Stream delivery count and DB attempt count diverged |
+| Reaper batches processed serially | 402baa9 | Recovery throughput was 1/N of available |
+| Postgres restart left workers disconnected | 0773a61 | Did not reconnect cleanly after DB restart |
+| Combined Redis wipe + worker kill stranded events | 923c92b | Two failures at once were not sequenced |
+| Stale-row recovery broken after CF-6 | e9aecb9 | Full stack recovery service restart was missing |
 
 The pattern: every bug was in the **recovery layer** - the code that only runs when something else has already gone wrong.
 
@@ -58,17 +58,18 @@ Every chaos commit above is a real test that now passes. Those tests are what "c
 ## Architecture
 
 ```mermaid
-flowchart LR
+flowchart TD
   P[Producer] -->|POST /v1/events| API
   API -->|event + outbox in one tx| PG[(PostgreSQL)]
   PG -->|poll unpublished, SKIP LOCKED| R[Relay]
-  R -->|XADD events:stream| RS[(Redis Stream)]
+  R -->|XADD| RS[(Redis Stream)]
   RS -->|XREADGROUP| W[Workers]
   W -->|row lock + status check + effect| PG
-  W -->|retry schedule| Z[(Redis ZSET)]
+  W -->|ZADD retry| Z[(Redis ZSET)]
+  Z -->|Lua mover| RS
   W -->|XACK + XDEL after commit| RS
-  SW[Sweeper] -->|stale recovery from PG| RS
-  W -->|XAUTOCLAIM stale messages| RS
+  SW[Sweeper] -->|stale events| RS
+  W -->|XAUTOCLAIM| RS
 ```
 
 ## Architecture guarantees
@@ -127,7 +128,7 @@ From a real run on an Apple M1 Pro with 3 workers:
 | Offered load (k6) | 500 req/s for 3 seconds |
 | API p95 at that load | 3.78 ms |
 | Requests accepted | 1,500 / 1,500 (0 errors) |
-| Sustained processing rate (3 workers, 90s run) | 200.08 events/s |
+| Sustained processing rate (3 workers, 90s run) | >=200 events/s (worker kept up with 200 req/s for 90s; ceiling not measured) |
 | API p50 / p95 / p99 (`dup_heavy`) | 1.60 / 3.78 / 8.01 ms |
 | End-to-end p95 | 106.83 ms (dominated by `RELAY_POLL_MS=100`) |
 | Duplicates blocked at API layer | 1,000 |
