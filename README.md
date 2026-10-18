@@ -8,6 +8,35 @@
 
 > **At-least-once delivery with idempotent processing.** Each unique idempotency key produces at most one business effect.
 
+## Live Demo (AWS EC2)
+
+Base URL: **https://13.233.154.87.sslip.io**
+
+Test the duplicate-blocking guarantee directly from your terminal:
+
+```bash
+# 1. First request: 202 Accepted (Event created)
+curl -s -X POST https://13.233.154.87.sslip.io/v1/events \
+  -H 'X-API-Key: portfolio-demo-key-123' \
+  -H 'Idempotency-Key: demo-1' \
+  -H 'Content-Type: application/json' \
+  -d '{"type":"payment.captured","payload":{"merchant_id":"m_1","amount_minor":50000,"currency":"INR","payment_id":"p1"}}'
+
+# 2. Same key, same body: 200 OK (duplicate: true, no double payment)
+curl -s -X POST https://13.233.154.87.sslip.io/v1/events \
+  -H 'X-API-Key: portfolio-demo-key-123' \
+  -H 'Idempotency-Key: demo-1' \
+  -H 'Content-Type: application/json' \
+  -d '{"type":"payment.captured","payload":{"merchant_id":"m_1","amount_minor":50000,"currency":"INR","payment_id":"p1"}}'
+
+# 3. Same key, different body: 422 IDEMPOTENCY_KEY_REUSED
+curl -s -X POST https://13.233.154.87.sslip.io/v1/events \
+  -H 'X-API-Key: portfolio-demo-key-123' \
+  -H 'Idempotency-Key: demo-1' \
+  -H 'Content-Type: application/json' \
+  -d '{"type":"payment.captured","payload":{"merchant_id":"m_1","amount_minor":99999,"currency":"INR","payment_id":"p1"}}'
+```
+
 A production-style TypeScript backend for payment events. PostgreSQL is the source of truth, Redis is a delivery helper. Correctness is enforced by database constraints and transactions - so a Redis wipe, worker crash, or lock expiry is fully recoverable.
 
 **What makes this different:** It survives chaos. Nine in-process chaos scenarios and six Docker chaos scenarios exercise real crashes, Redis flushes, Postgres restarts, and lock expiry. All 10 correctness invariants pass under every one. The chaos phase found 8 distinct recovery-layer root causes across the chaos-phase fix commits.
