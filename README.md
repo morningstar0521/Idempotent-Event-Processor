@@ -116,6 +116,8 @@ Correctness depends on the three DB layers. The Redis lock can disappear and the
 
 Every row: 0 lost events, 0 duplicate effects, all 10 invariants pass.
 
+**Why CF-1 takes 46.7s:** With `VISIBILITY_TIMEOUT_MS=30000`, orphaned messages wait up to 30s before the reaper can reclaim them. With 9 kills x 5s intervals plus the 30s timeout plus drain, ~46s is the expected recovery window. This is the cost of at-least-once delivery: we trade recovery latency for zero data loss.
+
 ## Measured performance
 
 From a real run on an Apple M1 Pro with 3 workers:
