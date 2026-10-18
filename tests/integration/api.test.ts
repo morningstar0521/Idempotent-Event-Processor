@@ -145,6 +145,22 @@ describe.sequential('Phase 1 API', () => {
     expect((await fetch(`${baseUrl}/health`)).status).toBe(200);
   });
 
+  it('I-API-15 returns the public API root without an API key', async () => {
+    const response = await fetch(baseUrl);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      name: 'idempotent-event-processor',
+      status: 'online',
+      version: '1.0.0',
+      documentation: 'https://github.com/morningstar0521/Idempotent-Event-Processor',
+      endpoints: {
+        health: '/health',
+        events: 'POST /v1/events',
+        dlq: 'GET /v1/dlq',
+      },
+    });
+  });
+
   it('I-API-10 rejects bodies over 10kb without storage', async () => {
     const response = await fetch(`${baseUrl}/v1/events`, { method: 'POST', headers: { ...headers(), 'Idempotency-Key': 'api-10' }, body: JSON.stringify({ ...payment, payload: { ...payment.payload, payment_id: 'x'.repeat(11000) } }) });
     expect([400, 413]).toContain(response.status);

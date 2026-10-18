@@ -18,6 +18,17 @@ export function createApp(options: ServerOptions = {}) {
   const redisClient = options.redisClient ?? redis;
   app.use(requestLogging);
   app.use(express.json({ limit: '10kb' }));
+  app.get('/', (_request, response) => response.json({
+    name: 'idempotent-event-processor',
+    status: 'online',
+    version: '1.0.0',
+    documentation: 'https://github.com/morningstar0521/Idempotent-Event-Processor',
+    endpoints: {
+      health: '/health',
+      events: 'POST /v1/events',
+      dlq: 'GET /v1/dlq',
+    },
+  }));
   app.get('/health', (_request, response) => response.json({ status: 'ok' }));
   app.get('/ready', async (_request, response) => {
     const checks = await Promise.allSettled([queryFn('SELECT 1'), redisClient.ping()]);
