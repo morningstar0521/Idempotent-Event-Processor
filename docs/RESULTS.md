@@ -60,8 +60,8 @@ CHAOS_PAUSE_MS=0
 
 | Metric | Measured |
 |---|---:|
-| Ingest rate (requests/sec) | 199.97 |
-| Processed rate (events/sec) | 200.08 |
+| Ingest rate (total requests/sec) | 199.97 |
+| Unique event rate (events/sec) | 200.08 |
 
 ## Processing ceiling (3 workers)
 
@@ -71,7 +71,7 @@ CHAOS_PAUSE_MS=0
 | Unique events sent | 18000 |
 | Processed after drain | 18000 |
 | Drain time (first created to last processed) | 89.96s |
-| Sustained processing rate | 200.08 events/s |
+| Sustained unique processing rate | 200.08 unique events/s |
 | Peak stream_pending | 25 |
 | Peak delayed_size | 0 |
 | Verdict | ingest-bound |
