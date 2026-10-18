@@ -39,14 +39,14 @@ They found 8 distinct root causes in the recovery layer. Here are the 8 most imp
 
 | Bug | Commit | What was wrong |
 |---|---|---|
-| Reaper recovery failed after visibility timeout | d734c53, d1d33fd | Reaper scheduling and pending-index fallback could strand messages |
-| Worker stopped polling after an isolated handler crash | 4f3957c | A single crash could kill the read loop |
-| Terminal messages not cleaned after reaper handling | 08c698e | Processed or dead messages remained in Redis |
-| Poison and crash deliveries not capped | 7dba828, 14cecaa | Delivery counts could diverge and loop workers indefinitely |
-| Reaper batches processed serially | 402baa9 | Recovery throughput was 1/N of available |
-| Postgres restart left workers disconnected | 0773a61 | Did not reconnect cleanly after DB restart |
-| Combined Redis wipe + worker kill stranded events | 923c92b | Two failures at once were not sequenced |
-| Stale-row recovery broken after CF-6 | 9410022, e9aecb9 | Full Redis recovery required stale Postgres rows and service restart |
+| Reaper recovery failed after visibility timeout | [d734c53](https://github.com/morningstar0521/Idempotent-Event-Processor/commit/d734c53), [d1d33fd](https://github.com/morningstar0521/Idempotent-Event-Processor/commit/d1d33fd) | Reaper scheduling and pending-index fallback could strand messages |
+| Worker stopped polling after an isolated handler crash | [4f3957c](https://github.com/morningstar0521/Idempotent-Event-Processor/commit/4f3957c) | A single crash could kill the read loop |
+| Terminal messages not cleaned after reaper handling | [08c698e](https://github.com/morningstar0521/Idempotent-Event-Processor/commit/08c698e) | Processed or dead messages remained in Redis |
+| Poison and crash deliveries not capped | [7dba828](https://github.com/morningstar0521/Idempotent-Event-Processor/commit/7dba828), [14cecaa](https://github.com/morningstar0521/Idempotent-Event-Processor/commit/14cecaa) | Delivery counts could diverge and loop workers indefinitely |
+| Reaper batches processed serially | [402baa9](https://github.com/morningstar0521/Idempotent-Event-Processor/commit/402baa9) | Recovery throughput was 1/N of available |
+| Postgres restart left workers disconnected | [0773a61](https://github.com/morningstar0521/Idempotent-Event-Processor/commit/0773a61) | Did not reconnect cleanly after DB restart |
+| Combined Redis wipe + worker kill stranded events | [923c92b](https://github.com/morningstar0521/Idempotent-Event-Processor/commit/923c92b) | Two failures at once were not sequenced |
+| Stale-row recovery broken after CF-6 | [9410022](https://github.com/morningstar0521/Idempotent-Event-Processor/commit/9410022), [e9aecb9](https://github.com/morningstar0521/Idempotent-Event-Processor/commit/e9aecb9) | Full Redis recovery required stale Postgres rows and service restart |
 
 The pattern: every bug was in the **recovery layer** - the code that only runs when something else has already gone wrong.
 
