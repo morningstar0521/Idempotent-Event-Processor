@@ -125,7 +125,7 @@ HAVING w.balance_minor <> COALESCE(SUM(l.amount_minor), 0);
 -- must return zero rows
 ```
 
-## Notes for the agent
+## Implementation notes
 
 - Use a `pg.Pool` (max 20). Always release clients in `finally`.
 - Use explicit transactions with `BEGIN` / `COMMIT` / `ROLLBACK` helpers (`withTx(fn)`).

@@ -1,8 +1,8 @@
 # BUILD PLAN
 
-Build one phase at a time. Write tests before or with the code. At the end of each phase: run the exit criteria, paste real output, list deviations, then STOP and wait for approval (see the report format in `AGENTS.md`).
+Build one phase at a time. Write tests before or with the code. At the end of each phase, run the exit criteria, record the real output, and list deviations.
 
-Time estimates are for a solo developer using a coding agent. They are guides, not promises.
+Time estimates are guides, not promises.
 
 | Phase | Name | Est. | Proves |
 |---|---|---|---|
@@ -20,7 +20,7 @@ Total: about 9 days. If time runs short, use the cut order at the end of this fi
 
 ## Rules for every phase
 
-- Read `AGENTS.md` hard rules before starting.
+- Confirm the project invariants before starting.
 - Build in the repo root. One lockfile: `pnpm-lock.yaml`.
 - Small commits in conventional style.
 - Tests named with the IDs from `docs/TESTING.md`.
@@ -36,7 +36,7 @@ Goal: an empty but correct skeleton that runs.
 Tasks:
 
 1. `git init`, `.gitignore` (see G9 in `docs/DECISIONS.md`), `.env.example` (all variables from `ARCHITECTURE.md` section 11 plus `METRICS_PORT`, `TEST_DATABASE_URL`, `TEST_REDIS_URL`), `docs/OPEN-QUESTIONS.md`.
-2. `package.json` with all scripts from `AGENTS.md` (scripts for later phases can print "not implemented yet" and exit 1). Node 20, pnpm, `"type": "module"` or CommonJS (pick one, state it in the report).
+2. `package.json` with all scripts listed in this plan (scripts for later phases can print "not implemented yet" and exit 1). Node 20, pnpm, `"type": "module"` or CommonJS (pick one, state it in the report).
 3. `tsconfig.json` with `strict: true`. ESLint (typescript-eslint) and Prettier.
 4. vitest config with separate unit, integration, and chaos projects. `globalSetup` for the test database.
 5. `docker-compose.yml`: `postgres:16` and `redis:7` (with `--appendonly yes`), healthchecks, volumes. Services for `api`, `relay`, `worker` come in later phases.

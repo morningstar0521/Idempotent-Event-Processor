@@ -1,6 +1,6 @@
 # DECISIONS
 
-Each decision is final for v1. The agent must not reverse any of them. If a decision looks wrong while building, write the problem in `docs/OPEN-QUESTIONS.md` and ask. Format: decision, why, rejected options, cost we accept.
+Each decision is final for v1. If a decision needs reconsideration, record the issue in `docs/OPEN-QUESTIONS.md` before changing it. Format: decision, why, rejected options, cost we accept.
 
 > Guarantee: at-least-once delivery with idempotent processing. Each unique idempotency key produces at most one business effect.
 
@@ -13,7 +13,7 @@ Each decision is final for v1. The agent must not reverse any of them. If a deci
 
 ### D2. Say "at-least-once delivery with idempotent processing"
 - Why: a message system cannot honestly promise that a message is delivered once. The network can lose an ack, and a worker can crash after the effect. What we can promise is that duplicate deliveries do not repeat the effect.
-- Rule: the banned phrase from AGENTS.md never appears in code, docs, logs, commits, or the README. CI greps for it.
+- Rule: the prohibited guarantee wording never appears in code, docs, logs, commits, or the README. CI greps for it.
 - Interview line: "Delivery is at-least-once. The effect happens at most once per key because the database enforces it."
 
 ### D3. Three correctness layers in Postgres, one efficiency layer in Redis
@@ -54,7 +54,7 @@ Each decision is final for v1. The agent must not reverse any of them. If a deci
 
 ### D10. Redis Streams with a consumer group (not BullMQ, not Kafka, not a plain List)
 - Why Streams: built-in consumer groups, a pending entries list (so crashed work is visible and reclaimable), `XAUTOCLAIM`, and delivery counts. This is the closest Redis feature to what Kafka offers, at a fraction of the setup cost.
-- Rejected: Kafka (setup time, adds little to what the project demonstrates, and the brief says to skip it first), BullMQ (hides the mechanics we want to show, and AGENTS.md bans it), `LIST` with `BRPOPLPUSH` (no consumer groups or delivery counts).
+- Rejected: Kafka (setup time, adds little to what the project demonstrates, and the brief says to skip it first), BullMQ (hides the mechanics this project demonstrates), `LIST` with `BRPOPLPUSH` (no consumer groups or delivery counts).
 - Cost: Redis is not a replicated log. Documented as a limitation. Redis Streams are not durable like Kafka, and that is why Postgres plus the sweeper exists.
 - Consumer group creation uses start id `0` (not `$`), so messages added before the group exists are not skipped. Ignore `BUSYGROUP`.
 
@@ -157,7 +157,7 @@ Each decision is final for v1. The agent must not reverse any of them. If a deci
 
 ## G. Gaps in the other docs, resolved here
 
-The agent should use these defaults and not stop to ask. They are small and do not change any decision above.
+Use these defaults. They are small and do not change any decision above.
 
 | # | Gap | Resolution |
 |---|---|---|

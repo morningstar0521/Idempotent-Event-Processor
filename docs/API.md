@@ -138,7 +138,7 @@ Prometheus text format. Metrics are listed in `docs/ARCHITECTURE.md` section 12.
 
 One log line per request: method, route, status, duration, `event_id` if known. No bodies.
 
-## Notes for the agent
+## Implementation notes
 
 - Use Express 5 async handlers and one central error middleware that maps domain errors to the table above.
 - Validate with Zod. Reject unknown fields in `payload` (use `.strict()`).

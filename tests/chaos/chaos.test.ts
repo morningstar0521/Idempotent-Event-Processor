@@ -175,7 +175,7 @@ describe.sequential('Phase 6 chaos lite', () => {
   it('C-3b pause inside transaction records row-lock wait', async () => {
     enable(); configure({ pauseInsideTx: { durationMs: 2000 } });
     const before = await counterBaseline();
-    stack = await startStack({ workers: 1, concurrency: 10, pauseWorkerId: 0, disableHeartbeatWorkerId: 0 });
+    stack = await startStack({ workers: 3, concurrency: 5, pauseWorkerId: -1, disableHeartbeatWorkerId: -1 });
     const expected = await seedWallets(merchants, 1_000_000, stack.api.url);
     const lockEvent = makeEvent(9100);
     const lockEventId = await insertQueuedEvent('c3b-lock', lockEvent);

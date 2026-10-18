@@ -19,7 +19,7 @@ Rules:
 - No mocks for Postgres or Redis in integration and chaos tests. Mocks cannot show lock, constraint, or transaction behavior.
 - Unit tests are for pure logic only (hashing, schemas, backoff math, error classification, config).
 - Write the test for a behavior before or together with the code (see `docs/BUILD-PLAN.md`).
-- A failing invariant is a bug in the code. Never loosen an invariant or a test to get green (AGENTS.md rule 2).
+- A failing invariant is a bug in the code. Never loosen an invariant or a test to get green.
 
 ## 2. Test environment
 
@@ -113,8 +113,8 @@ INV-8 needs a deterministic model. For chaos and load runs, seed each merchant w
 | I-WRK-4 | Event already `processed`, message arrives again | No-op, acked, `db_status` counter increments | F7, FR-8 |
 | I-WRK-5 | Call `applyEffect` twice in two separate transactions for one event id (bypass the status check on purpose) | Second ledger insert conflicts on `event_id`, wallet is not credited twice, `ledger_constraint` counter increments | Layer 4 |
 | I-WRK-7 | Effect throws midway (after wallet update, before event status update) | Whole transaction rolled back: no ledger row, no wallet change | Atomicity |
-| I-WRK-9 | Ack ordering: assert via a Redis spy that `XACK` is never called before the transaction commit | Pass in both success and failure paths | AGENTS rule 6 |
-| I-WRK-10 | Lock helper: acquire, second acquire fails, release with wrong token does nothing, release with right token works, TTL is always set | Pass | AGENTS rule 8 |
+| I-WRK-9 | Ack ordering: assert via a Redis spy that `XACK` is never called before the transaction commit | Pass in both success and failure paths | Ack ordering invariant |
+| I-WRK-10 | Lock helper: acquire, second acquire fails, release with wrong token does nothing, release with right token works, TTL is always set | Pass | Lock TTL and ownership invariant |
 | I-WRK-11 | Heartbeat renews TTL while handler runs longer than `LOCK_TTL_MS` | Lock key still held after 2x TTL. Stops renewing after handler ends | ARCHITECTURE 5 |
 
 I-WRK-6 and I-WRK-8 require the Phase 4 `handleFailure` implementation and are specified in §5.4.
@@ -318,7 +318,7 @@ CI (GitHub Actions, on every push and pull request), with Postgres 16 and Redis 
 6. `pnpm test:integration`
 7. `pnpm test:chaos`
 8. `docker build .` (image builds)
-9. A grep step that fails the build if the banned phrase from AGENTS.md or the long dash character appears in `src/`, `docs/`, `README.md`, `tests/`, `scripts/`. Exclude only `AGENTS.md` and `docs/TESTING.md` if they must quote the rule.
+9. A grep step that fails the build if the prohibited guarantee wording or the long dash character appears in `src/`, `docs/`, `README.md`, `tests/`, or `scripts/`.
 
 Manual smoke test after any deploy (EC2 or local compose):
 
