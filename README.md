@@ -51,7 +51,7 @@ They found 10 distinct root causes in the recovery layer. Here are the 9 most im
 
 The pattern: every bug was in the **recovery layer** - the code that only runs when something else has already gone wrong.
 
-This is what "chaos-tested" actually means: it is not marketing. It is 19 commits that would have shipped without the chaos suite.
+Every chaos commit above is a real test that now passes. Those tests are what "chaos-tested" means in this project.
 
 ---
 
@@ -150,7 +150,7 @@ docker compose up --build
 
 The stack reaches `/ready` in approximately 68.0s on a cold Docker run. The API is at `http://localhost:3000`. `.env.example` values target the host (for `pnpm dev:*`); `docker-compose.yml` overrides `DATABASE_URL` and `REDIS_URL` inside containers to use Compose service hostnames, so no edits are needed for the Docker path.
 
-Worker and relay metrics stay internal (D27); API metrics are at `/metrics`.
+Worker and relay metrics stay internal (see [DECISIONS.md D27](docs/DECISIONS.md#d27-one-docker-image-three-entrypoints-api-relay-worker)); API metrics are at `/metrics`.
 
 ## Duplicate-blocking demo
 
@@ -227,7 +227,6 @@ One Docker image, three entrypoints. `docker compose up --scale worker=3` demons
 - The demonstrated effect is a database write. An external bank API or third-party webhook needs its own idempotency key because it cannot join this transaction.
 - The numbers come from one machine and are not a capacity claim.
 
-These limits are documented because interviewers will ask. Being honest about them is part of the design.
 
 ## License
 
