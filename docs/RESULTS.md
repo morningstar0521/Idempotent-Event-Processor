@@ -7,7 +7,7 @@ Status: PASS
 - Run date: 2026-10-18T00:39:05.754Z
 - Git SHA: 045363e5eefa1481377886db3e3c08ddce0a5830
 - Node: v26.5.0
-- Load test runtime note: This load test was run on Node v26.5.0. CI and Docker use Node 20 (LTS). Both versions pass the identical test suite; the load test numbers are indicative.
+- Note: the load test was run on Node v26.5.0 (local machine). CI and Docker use Node 20 (LTS). Both versions pass the identical test suite; the load numbers are indicative of system performance, not a Node version difference.
 - Machine: Apple M1 Pro; 10 cores; 16 GiB RAM; darwin 24.6.0
 - Docker server: 29.8.2
 - Worker count: 3
