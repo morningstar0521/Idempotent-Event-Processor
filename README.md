@@ -20,7 +20,7 @@ A production-style TypeScript backend for payment events. PostgreSQL is the sour
 |---|---|
 | **API throughput (offered load)** | **500 req/s** |
 | **API p95 latency at 500 req/s** | **3.78 ms** |
-| **Sustained processing rate** | **>=200 events/s** (worker kept up with 200 req/s for 90s; ceiling not measured) |
+| **Sustained processing rate** | **>=200 unique events/s** (worker kept up with 200 req/s of unique events for 90s; ceiling not measured) |
 | **Lost events (all chaos scenarios)** | **0** |
 | **Duplicate effects (all chaos scenarios)** | **0** |
 | **Correctness invariants** | **10 / 10 passing** |
@@ -125,7 +125,7 @@ From a real run on an Apple M1 Pro with 3 workers:
 | Offered load (k6) | 500 req/s for 3 seconds |
 | API p95 at that load | 3.78 ms |
 | Requests accepted | 1,500 / 1,500 (0 errors) |
-| Sustained processing rate (3 workers, 90s run) | >=200 events/s (worker kept up with 200 req/s for 90s; ceiling not measured) |
+| Sustained processing rate (3 workers, 90s run) | >=200 unique events/s (worker kept up with 200 req/s of unique events for 90s; ceiling not measured) |
 | API p50 / p95 / p99 (`dup_heavy`) | 1.60 / 3.78 / 8.01 ms |
 | End-to-end p95 | 106.83 ms (dominated by `RELAY_POLL_MS=100`) |
 | Duplicates blocked at API layer | 1,000 |
