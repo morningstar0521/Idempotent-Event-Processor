@@ -1,5 +1,7 @@
 # Idempotent Event Processor
 
+A production-style TypeScript backend for payment events. PostgreSQL is the source of truth, Redis is a delivery helper. Correctness is enforced by database constraints and transactions - so a Redis wipe, worker crash, or lock expiry is fully recoverable.
+
 [![CI](https://github.com/morningstar0521/Idempotent-Event-Processor/actions/workflows/ci.yml/badge.svg)](https://github.com/morningstar0521/Idempotent-Event-Processor/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-20.x-green.svg)](.github/workflows/ci.yml)
@@ -10,34 +12,34 @@
 
 ## Live Demo (AWS EC2)
 
-Base URL: **https://13.233.154.87.sslip.io**
+Base URL: **https://13.202.192.20.sslip.io**
 
 Test the duplicate-blocking guarantee directly from your terminal:
 
 ```bash
+DEMO_KEY="demo-$(date +%s)"
+
 # 1. First request: 202 Accepted (Event created)
-curl -s -X POST https://13.233.154.87.sslip.io/v1/events \
+curl -s -X POST https://13.202.192.20.sslip.io/v1/events \
   -H 'X-API-Key: portfolio-demo-key-123' \
-  -H 'Idempotency-Key: demo-1' \
+  -H "Idempotency-Key: $DEMO_KEY" \
   -H 'Content-Type: application/json' \
   -d '{"type":"payment.captured","payload":{"merchant_id":"m_1","amount_minor":50000,"currency":"INR","payment_id":"p1"}}'
 
 # 2. Same key, same body: 200 OK (duplicate: true, no double payment)
-curl -s -X POST https://13.233.154.87.sslip.io/v1/events \
+curl -s -X POST https://13.202.192.20.sslip.io/v1/events \
   -H 'X-API-Key: portfolio-demo-key-123' \
-  -H 'Idempotency-Key: demo-1' \
+  -H "Idempotency-Key: $DEMO_KEY" \
   -H 'Content-Type: application/json' \
   -d '{"type":"payment.captured","payload":{"merchant_id":"m_1","amount_minor":50000,"currency":"INR","payment_id":"p1"}}'
 
 # 3. Same key, different body: 422 IDEMPOTENCY_KEY_REUSED
-curl -s -X POST https://13.233.154.87.sslip.io/v1/events \
+curl -s -X POST https://13.202.192.20.sslip.io/v1/events \
   -H 'X-API-Key: portfolio-demo-key-123' \
-  -H 'Idempotency-Key: demo-1' \
+  -H "Idempotency-Key: $DEMO_KEY" \
   -H 'Content-Type: application/json' \
   -d '{"type":"payment.captured","payload":{"merchant_id":"m_1","amount_minor":99999,"currency":"INR","payment_id":"p1"}}'
 ```
-
-A production-style TypeScript backend for payment events. PostgreSQL is the source of truth, Redis is a delivery helper. Correctness is enforced by database constraints and transactions - so a Redis wipe, worker crash, or lock expiry is fully recoverable.
 
 **What makes this different:** It survives chaos. Nine in-process chaos scenarios and six Docker chaos scenarios exercise real crashes, Redis flushes, Postgres restarts, and lock expiry. All 10 correctness invariants pass under every one. The chaos phase found 8 distinct recovery-layer root causes across the chaos-phase fix commits.
 
@@ -181,30 +183,7 @@ The stack reaches `/ready` in approximately 68.0s on a cold Docker run. The API 
 
 Worker and relay metrics stay internal (see [DECISIONS.md D27](docs/DECISIONS.md#d27-one-docker-image-three-entrypoints-api-relay-worker)); API metrics are at `/metrics`.
 
-## Duplicate-blocking demo
-
-```bash
-# First request: 202 Accepted, event created
-curl -s -X POST localhost:3000/v1/events \
-  -H 'X-API-Key: change-me' \
-  -H 'Idempotency-Key: demo-1' \
-  -H 'Content-Type: application/json' \
-  -d '{"type":"payment.captured","payload":{"merchant_id":"m_1","amount_minor":50000,"currency":"INR","payment_id":"p1"}}'
-
-# Same key, same body: 200 OK, duplicate:true, same event_id
-curl -s -X POST localhost:3000/v1/events \
-  -H 'X-API-Key: change-me' \
-  -H 'Idempotency-Key: demo-1' \
-  -H 'Content-Type: application/json' \
-  -d '{"type":"payment.captured","payload":{"merchant_id":"m_1","amount_minor":50000,"currency":"INR","payment_id":"p1"}}'
-
-# Same key, different body: 422 IDEMPOTENCY_KEY_REUSED, nothing changes
-curl -s -X POST localhost:3000/v1/events \
-  -H 'X-API-Key: change-me' \
-  -H 'Idempotency-Key: demo-1' \
-  -H 'Content-Type: application/json' \
-  -d '{"type":"payment.captured","payload":{"merchant_id":"m_1","amount_minor":99999,"currency":"INR","payment_id":"p1"}}'
-```
+To test locally, replace the Live Demo URL with http://localhost:3000 and use X-API-Key: change-me.
 
 ## Tests
 
