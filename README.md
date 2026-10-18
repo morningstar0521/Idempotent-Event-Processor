@@ -1,7 +1,5 @@
 # Idempotent Event Processor
 
-A production-style TypeScript backend for payment events. PostgreSQL is the source of truth, Redis is a delivery helper. Correctness is enforced by database constraints and transactions - so a Redis wipe, worker crash, or lock expiry is fully recoverable.
-
 [![CI](https://github.com/morningstar0521/Idempotent-Event-Processor/actions/workflows/ci.yml/badge.svg)](https://github.com/morningstar0521/Idempotent-Event-Processor/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-20.x-green.svg)](.github/workflows/ci.yml)
@@ -9,6 +7,8 @@ A production-style TypeScript backend for payment events. PostgreSQL is the sour
 [![Chaos](https://img.shields.io/badge/chaos-15%20scenarios%20passing-brightgreen.svg)](docs/RESULTS.md)
 
 > **At-least-once delivery with idempotent processing.** Each unique idempotency key produces at most one business effect.
+
+A production-style TypeScript backend for payment events. PostgreSQL is the source of truth, Redis is a delivery helper. Correctness is enforced by database constraints and transactions - so a Redis wipe, worker crash, or lock expiry is fully recoverable.
 
 ## Live Demo (AWS EC2)
 
