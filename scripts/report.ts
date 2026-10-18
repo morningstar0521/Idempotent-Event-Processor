@@ -9,7 +9,12 @@ const exec = promisify(execFile);
 const [summaryPath, snapshotPath, planPath, invariantPath] = process.argv.slice(2);
 if (!summaryPath || !snapshotPath || !planPath || !invariantPath) throw new Error('Usage: tsx scripts/report.ts <summary> <metrics> <plan> <invariants>');
 type K6Summary = { metrics: Record<string, Record<string, number> & { values?: Record<string, number> }> };
-type Snapshots = { before: Record<string, string[]>; after: Record<string, string[]>; e2e?: { p50: number; p95: number; p99: number } };
+type Snapshots = {
+  before: Record<string, string[]>;
+  after: Record<string, string[]>;
+  e2e?: { p50: number; p95: number; p99: number };
+  queueSamples?: Array<{ at: string; stream_pending: number; delayed_size: number }>;
+};
 type Invariants = { status: string; invariants: Array<{ id: string; status: string }> };
 const [summary, snapshots, plan, invariants] = await Promise.all([
   readJson<K6Summary>(summaryPath), readJson<Snapshots>(snapshotPath), readJson<LoadPlan>(planPath), readJson<Invariants>(invariantPath),
@@ -85,6 +90,20 @@ if (!Number.isFinite(rate)) throw new Error('Missing measured ingest rate');
 const processedRate = await pool.query<{ rate: string }>(`SELECT count(*) / NULLIF(extract(epoch FROM max(processed_at) - min(created_at)), 0) AS rate FROM events WHERE idempotency_key = ANY($1::text[]) AND status = 'processed'`, [plan.requests.map((request) => request.key).concat(plan.scenario === 'same_key_storm' ? ['same-key-storm'] : [])]);
 const processedRateValue = Number(processedRate.rows[0].rate);
 if (!Number.isFinite(processedRateValue)) throw new Error('Missing measured processed rate');
+const ceiling = plan.scenario === 'ceiling' ? await pool.query<{ unique_events: string; processed: string; first_created: string; last_processed: string }>(`SELECT
+  count(*)::text AS unique_events,
+  count(*) FILTER (WHERE status = 'processed')::text AS processed,
+  min(created_at)::text AS first_created,
+  max(processed_at)::text AS last_processed
+  FROM events WHERE idempotency_key = ANY($1::text[])`, [plan.requests.map((request) => request.key)]) : null;
+const ceilingRow = ceiling?.rows[0];
+const ceilingElapsed = ceilingRow?.first_created && ceilingRow.last_processed
+  ? (new Date(ceilingRow.last_processed).getTime() - new Date(ceilingRow.first_created).getTime()) / 1000 : NaN;
+const queueSamples = snapshots.queueSamples ?? [];
+const peakPending = Math.max(0, ...queueSamples.map((sample) => sample.stream_pending));
+const peakDelayed = Math.max(0, ...queueSamples.map((sample) => sample.delayed_size));
+const pendingGrewMonotonically = queueSamples.length > 1 && queueSamples.every((sample, index) => index === 0 || sample.stream_pending >= queueSamples[index - 1].stream_pending);
+const ceilingVerdict = pendingGrewMonotonically && peakPending > 0 ? 'worker-bound' : 'ingest-bound';
 const gitSha = (await exec('git', ['rev-parse', 'HEAD'])).stdout.trim();
 const dockerVersion = (await exec('docker', ['version', '--format', '{{.Server.Version}}'])).stdout.trim();
 const workerCount = (await exec('docker', ['compose', 'ps', '-q', 'worker'])).stdout.trim().split('\n').filter(Boolean).length;
@@ -145,6 +164,20 @@ ${config.trim()}
 |---|---:|
 | Ingest rate (requests/sec) | ${format(rate)} |
 | Processed rate (events/sec) | ${format(processedRateValue)} |
+${ceilingRow ? `
+## Processing ceiling (3 workers)
+
+| Metric | Value |
+|---|---:|
+| Offered load | 200 req/s for 90s |
+| Unique events sent | ${ceilingRow.unique_events} |
+| Processed after drain | ${ceilingRow.processed} |
+| Drain time (first created to last processed) | ${format(ceilingElapsed)}s |
+| Sustained processing rate | ${format(Number(ceilingRow.processed) / ceilingElapsed)} events/s |
+| Peak stream_pending | ${format(peakPending)} |
+| Peak delayed_size | ${format(peakDelayed)} |
+| Verdict | ${ceilingVerdict} |
+` : ''}
 
 ## Latency by scenario
 

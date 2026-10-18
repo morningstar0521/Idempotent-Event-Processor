@@ -9,7 +9,8 @@ import { readFile } from 'node:fs/promises';
 const exec = promisify(execFile);
 const root = process.cwd();
 const planPath = `${root}/scripts/load/plan.json`;
-const scenario = process.env.LOAD_SCENARIO || 'dup_heavy';
+const scenario = process.argv.find((argument) => argument.startsWith('--scenario='))?.split('=')[1]
+  || process.env.LOAD_SCENARIO || 'dup_heavy';
 const baseUrl = process.env.LOAD_BASE_URL || 'http://127.0.0.1:3000';
 const apiKey = process.env.API_KEY || 'change-me';
 const databaseUrl = process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/events';
@@ -84,6 +85,35 @@ async function snapshot(): Promise<Record<string, string[]>> {
   };
 }
 
+type QueueSample = { at: string; stream_pending: number; delayed_size: number };
+
+function metricValue(text: string, metric: string): number {
+  const match = text.match(new RegExp(`^${metric}\\s+([0-9.eE+-]+)$`, 'm'));
+  return match ? Number(match[1]) : 0;
+}
+
+async function sampleQueue(): Promise<QueueSample> {
+  const workerIds = (await command('docker', ['compose', 'ps', '-q', 'worker'])).trim().split('\n').filter(Boolean);
+  const samples = await Promise.all(workerIds.map((id) => command('docker', ['exec', id, 'node', '-e', "fetch('http://127.0.0.1:9101/metrics').then(r=>r.text()).then(console.log)"])));
+  return {
+    at: new Date().toISOString(),
+    stream_pending: Math.max(...samples.map((text) => metricValue(text, 'stream_pending'))),
+    delayed_size: Math.max(...samples.map((text) => metricValue(text, 'delayed_size'))),
+  };
+}
+
+function startQueueSampling(): { stop: () => Promise<QueueSample[]> } {
+  const samples: QueueSample[] = [];
+  const timer = globalThis.setInterval(() => { void sampleQueue().then((sample) => samples.push(sample)); }, 5000);
+  return {
+    stop: async () => {
+      globalThis.clearInterval(timer);
+      samples.push(await sampleQueue());
+      return samples;
+    },
+  };
+}
+
 async function runK6(plan: LoadPlan): Promise<string> {
   const resultRelativePath = `scripts/load/results-${plan.run_id}.json`;
   const resultPath = `${root}/${resultRelativePath}`;
@@ -103,18 +133,20 @@ async function main(): Promise<void> {
   await getJson('/ready');
   await resetState();
   const runId = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
-  const uniqueEvents = scenario === 'smoke' ? 10 : Number(process.env.UNIQUE_EVENTS || 500);
+  const uniqueEvents = scenario === 'smoke' ? 10 : scenario === 'ceiling' ? 18000 : Number(process.env.UNIQUE_EVENTS || 500);
   const plan = createPlan(runId, uniqueEvents, 2, scenario);
   await writePlan(planPath, plan);
   await seedWallets();
   const before = await snapshot();
+  const queueSampling = scenario === 'ceiling' ? startQueueSampling() : undefined;
   const summaryPath = await runK6(plan);
+  const queueSamples = queueSampling ? await queueSampling.stop() : [];
   await waitForDrain(Number(process.env.DRAIN_TIMEOUT_MS || 120000));
   const after = await snapshot();
   const e2e = await e2eLatency(plan);
   const snapshotPath = `${root}/scripts/load/metrics-${runId}.json`;
   const invariantPath = `${root}/scripts/load/invariants-${runId}.json`;
-  await writeFile(snapshotPath, JSON.stringify({ before, after, e2e }, null, 2));
+  await writeFile(snapshotPath, JSON.stringify({ before, after, e2e, queueSamples }, null, 2));
   const expectedKeys = scenario === 'same_key_storm' ? 21 : plan.unique_events + 20;
   await command('pnpm', ['tsx', 'scripts/load/assert-invariants.ts', JSON.stringify(plan.expected_balances), String(expectedKeys), invariantPath], {
     env: { TEST_DATABASE_URL: databaseUrl, TEST_REDIS_URL: redisUrl },

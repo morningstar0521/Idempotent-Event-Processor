@@ -28,7 +28,7 @@ export function createPlan(runId: string, uniqueEvents: number, duplicateRatio: 
     const body = makeEvent(index);
     const key = `load-${runId}-${index}`;
     expectedBalances[body.payload.merchant_id] += body.payload.amount_minor;
-    const sends = scenario === 'smoke' ? 1 : 3;
+    const sends = scenario === 'smoke' || scenario === 'ceiling' ? 1 : 3;
     for (let send = 0; send < sends; send += 1) requests.push({ key, body, isDuplicate: send > 0 });
   }
   const plan: LoadPlan = {

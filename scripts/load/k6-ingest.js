@@ -1,5 +1,6 @@
-/* global __ENV, __ITER, __VU, open */
+/* global __ENV, __ITER, open */
 import http from 'k6/http';
+import exec from 'k6/execution';
 import { check } from 'k6';
 import { Counter } from 'k6/metrics';
 
@@ -27,7 +28,22 @@ export const options = scenario === 'smoke'
         summaryTrendStats,
         thresholds: { checks: ['rate>0.999'], http_req_failed: ['rate<0.001'], responses_202: ['count==1'], responses_200: ['count==999'] },
       }
-    : {
+    : scenario === 'ceiling'
+      ? {
+          scenarios: {
+            ceiling: {
+              executor: 'constant-arrival-rate',
+              rate: 200,
+              timeUnit: '1s',
+              duration: '90s',
+              preAllocatedVUs: 100,
+              maxVUs: 400,
+            },
+          },
+          summaryTrendStats,
+          thresholds: { checks: ['rate>0.999'], http_req_failed: ['rate<0.001'] },
+        }
+      : {
         // Target rate is configurable and is recorded by the orchestrator in RESULTS.md.
         scenarios: {
           dup_heavy: {
@@ -48,8 +64,7 @@ function requestFor(iteration) {
     return { key: 'same-key-storm', body: plan.stormBody };
   }
   if (scenario === 'smoke') return plan.requests[iteration % plan.requests.length];
-  const stride = Number(__ENV.PREALLOCATED_VUS || 50);
-  return plan.requests[((__ITER * stride) + __VU - 1) % plan.requests.length];
+  return plan.requests[exec.scenario.iterationInTest % plan.requests.length];
 }
 
 export default function () {
