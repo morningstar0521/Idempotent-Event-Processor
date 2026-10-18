@@ -44,8 +44,8 @@ services:
       CMD: api
       NODE_ENV: development
       API_KEY: ${API_KEY:-change-me}
-      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@postgres:5432/events}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/events
+      REDIS_URL: redis://redis:6379
       PORT: 3000
     depends_on:
       postgres:
@@ -63,8 +63,8 @@ services:
     environment:
       CMD: relay
       NODE_ENV: development
-      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@postgres:5432/events}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/events
+      REDIS_URL: redis://redis:6379
       METRICS_PORT: ${METRICS_PORT:-9102}
     depends_on:
       postgres:
@@ -80,8 +80,8 @@ services:
     environment:
       CMD: worker
       NODE_ENV: development
-      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@postgres:5432/events}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/events
+      REDIS_URL: redis://redis:6379
       METRICS_PORT: 9101
     depends_on:
       postgres:

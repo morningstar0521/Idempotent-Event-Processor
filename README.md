@@ -140,10 +140,12 @@ One machine, not a capacity claim. Reproduce with `pnpm load`.
 git clone https://github.com/morningstar0521/Idempotent-Event-Processor.git
 cd Idempotent-Event-Processor
 cp .env.example .env
-time docker compose up --build
+docker compose up --build
 ```
 
-Clean-clone `docker compose up --build -d` brings containers up in 12.29s; a cold Docker run reached `/ready` in approximately 74.6s with temporary Compose service-host URLs. The default `.env.example` currently points containers at `localhost`, so use Compose service URLs for a ready stack. The API is at `http://localhost:3000`. The Compose stack starts Postgres and Redis, runs migrations once, then starts the API, relay, and workers. Worker and relay metrics stay internal (D27); API metrics are at `/metrics`.
+The stack reaches `/ready` in approximately 68.0s on a cold Docker run. The API is at `http://localhost:3000`. `.env.example` values target the host (for `pnpm dev:*`); `docker-compose.yml` overrides `DATABASE_URL` and `REDIS_URL` inside containers to use Compose service hostnames, so no edits are needed for the Docker path.
+
+Worker and relay metrics stay internal (D27); API metrics are at `/metrics`.
 
 ## Duplicate-blocking demo
 
