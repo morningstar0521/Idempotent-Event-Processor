@@ -1,0 +1,7 @@
+{$SITE_ADDRESS} {
+	# Keep Prometheus metrics private
+	@metrics path /metrics*
+	respond @metrics 404
+
+	reverse_proxy api:3000
+}

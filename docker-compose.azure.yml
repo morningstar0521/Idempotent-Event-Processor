@@ -1,0 +1,78 @@
+# Low-memory production override for a 1 GB VM (Azure B1s / GCP e2-micro).
+# Usage: docker compose -f docker-compose.yml -f docker-compose.azure.yml up -d --build
+# Requires Docker Compose 2.24+ (for !reset).
+
+services:
+  postgres:
+    restart: unless-stopped
+    ports: !reset []
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    command:
+      - postgres
+      - -c
+      - shared_buffers=64MB
+      - -c
+      - work_mem=2MB
+      - -c
+      - maintenance_work_mem=32MB
+      - -c
+      - effective_cache_size=192MB
+    mem_limit: 256m
+
+  redis:
+    restart: unless-stopped
+    ports: !reset []
+    command: ['redis-server', '--appendonly', 'yes', '--maxmemory', '64mb', '--maxmemory-policy', 'noeviction']
+    mem_limit: 96m
+
+  migrate:
+    environment:
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/events
+
+  api:
+    ports: !reset []
+    environment:
+      NODE_ENV: production
+      API_KEY: ${API_KEY:?set API_KEY in .env}
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/events
+      NODE_OPTIONS: --max-old-space-size=128
+      CHAOS_ENABLED: 'false'
+    mem_limit: 192m
+
+  relay:
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/events
+      NODE_OPTIONS: --max-old-space-size=128
+      CHAOS_ENABLED: 'false'
+    mem_limit: 192m
+
+  worker:
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/events
+      NODE_OPTIONS: --max-old-space-size=128
+      WORKER_CONCURRENCY: '4'
+      CHAOS_ENABLED: 'false'
+    mem_limit: 192m
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS in .env}
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+    mem_limit: 64m
+
+volumes:
+  caddy_data:
+  caddy_config:
