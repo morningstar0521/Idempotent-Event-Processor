@@ -14,9 +14,21 @@ export interface RelayDependencies {
   withTxFn?: typeof withTx;
   batchSize?: number;
   pollMs?: number;
+  fanoutStream?: string;
+  fanoutMaxlen?: number;
 }
 
-export async function publishBatch(client: PoolClient, redisClient: Redis, batchSize: number): Promise<number> {
+export interface FanoutOptions {
+  stream?: string;
+  maxlen: number;
+}
+
+export async function publishBatch(
+  client: PoolClient,
+  redisClient: Redis,
+  batchSize: number,
+  fanout: FanoutOptions = { stream: config.FANOUT_STREAM, maxlen: config.FANOUT_MAXLEN },
+): Promise<number> {
   const rows = await client.query<{ id: string; event_id: string; type: string }>(
     `SELECT o.id, o.event_id, e.type
        FROM outbox o
@@ -31,7 +43,19 @@ export async function publishBatch(client: PoolClient, redisClient: Redis, batch
   if (rows.rowCount === 0) return 0;
 
   for (const row of rows.rows) {
-    await redisClient.xadd(STREAM, '*', 'event_id', row.event_id, 'type', row.type);
+    if (fanout.stream) {
+      // Both XADDs go in one MULTI. Never XDEL the fan-out stream; retention is MAXLEN ~ only.
+      const results = await redisClient
+        .multi()
+        .xadd(STREAM, '*', 'event_id', row.event_id, 'type', row.type)
+        .xadd(fanout.stream, 'MAXLEN', '~', String(fanout.maxlen), '*', 'event_id', row.event_id, 'type', row.type)
+        .exec();
+      if (results === null) throw new Error('fan-out MULTI was aborted');
+      const failed = results.find(([error]) => error !== null);
+      if (failed) throw failed[0];
+    } else {
+      await redisClient.xadd(STREAM, '*', 'event_id', row.event_id, 'type', row.type);
+    }
     crashAfterRelayXadd();
   }
 
@@ -43,8 +67,12 @@ export async function pollOnce(dependencies: RelayDependencies = {}): Promise<nu
   const redisClient = dependencies.redisClient ?? redis;
   const withTxFn = dependencies.withTxFn ?? withTx;
   const batchSize = dependencies.batchSize ?? config.RELAY_BATCH;
+  const fanout: FanoutOptions = {
+    stream: 'fanoutStream' in dependencies ? dependencies.fanoutStream : config.FANOUT_STREAM,
+    maxlen: dependencies.fanoutMaxlen ?? config.FANOUT_MAXLEN,
+  };
   try {
-    const published = await withTxFn((client) => publishBatch(client, redisClient, batchSize));
+    const published = await withTxFn((client) => publishBatch(client, redisClient, batchSize, fanout));
     streamLength.set(await redisClient.xlen(STREAM));
     return published;
   } catch (error) {

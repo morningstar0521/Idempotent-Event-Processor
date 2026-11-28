@@ -163,6 +163,21 @@ On the same-key storm, p95 measured 1,066.52 ms. That is not a system latency fi
 
 One machine, not a capacity claim. Reproduce with `pnpm load`.
 
+## Optional fan-out stream (v1.1)
+
+Optional fan-out stream for downstream subscribers (v1.1). It is off by default. With `FANOUT_STREAM` unset, the relay does a single `XADD` to `events:stream`, exactly as in v1, so the results above still apply.
+
+| Setting | Default | Effect |
+|---|---|---|
+| `FANOUT_STREAM` | unset (off) | Stream name, e.g. `events:fanout`. Set it on the relay only. Must not be `events:stream`. |
+| `FANOUT_MAXLEN` | `1000000` | Approximate retention (`XADD MAXLEN ~`). |
+
+- When set, the relay publishes each event to `events:stream` and the fan-out stream in one `MULTI`. If either `XADD` fails, the batch fails and the outbox rows stay unpublished.
+- Messages carry the same two fields: `event_id` and `type`.
+- Workers never read or `XDEL` the fan-out stream. Retention is by `MAXLEN ~` only, so a subscriber that lags by more than `FANOUT_MAXLEN` loses messages.
+- Only the relay fans out. Sweeper re-deliveries, delayed retries and DLQ replays do not.
+- Delivery is at-least-once. A relay crash after `EXEC` but before the outbox commit republishes the event, so subscribers must dedupe on `event_id`.
+
 ## Quick start
 
 ```bash

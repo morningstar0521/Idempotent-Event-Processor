@@ -28,7 +28,10 @@ const envSchema = z.object({
   CHAOS_CRASH_BEFORE_COMMIT_PROB: z.coerce.number().min(0).max(1).default(0),
   CHAOS_CRASH_AFTER_COMMIT_PROB: z.coerce.number().min(0).max(1).default(0),
   CHAOS_DISABLE_HEARTBEAT: booleanEnv,
-  CHAOS_PAUSE_MS: z.coerce.number().int().nonnegative().default(0)
+  CHAOS_PAUSE_MS: z.coerce.number().int().nonnegative().default(0),
+  // Optional fan-out stream for downstream subscribers (v1.1). Unset or empty = off.
+  FANOUT_STREAM: z.preprocess((value) => (value === '' ? undefined : value), z.string().min(1).optional()),
+  FANOUT_MAXLEN: z.coerce.number().int().positive().default(1000000)
 });
 
 export type Config = z.infer<typeof envSchema>;
@@ -40,6 +43,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   }
   if (result.data.NODE_ENV === 'production' && result.data.CHAOS_ENABLED) {
     throw new Error('CHAOS_ENABLED cannot be true in production');
+  }
+  if (result.data.FANOUT_STREAM === 'events:stream') {
+    throw new Error('FANOUT_STREAM must not be events:stream');
   }
   if (result.data.SWEEP_STALE_MS <= result.data.BACKOFF_CAP_MS) {
     throw new Error('SWEEP_STALE_MS must be greater than BACKOFF_CAP_MS');
